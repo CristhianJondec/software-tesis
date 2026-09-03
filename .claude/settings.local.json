@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(grep -rn '\\\\.has\\(\\\\|await auth\\(\\)\\\\|\\\\.find\\({.*$text\\\\|text.*search\\\\|countDocuments\\\\|insertMany\\\\|findByIdAndUpdate' 'c:\\\\GitHub\\\\_CLON\\\\jsm_bookified' '--include=*.ts' '--include=*.tsx')",
+      "Bash(npm install *)",
+      "Bash(PGPASSWORD=123456 psql -U postgres -h localhost -p 5432 -d prueba -c \"SELECT * FROM pg_available_extensions WHERE name='vector';\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5432 -ErrorAction SilentlyContinue)",
+      "Bash(npx --yes shadcn@latest add card --yes)"
+    ]
+  }
+}
