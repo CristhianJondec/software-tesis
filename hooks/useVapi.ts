@@ -7,7 +7,7 @@ import Vapi from '@vapi-ai/web';
 import { useSession } from '@/lib/auth-client';
 
 import { useSubscription } from '@/hooks/useSubscription';
-import { ASSISTANT_ID, DEFAULT_VOICE, VOICE_SETTINGS } from '@/lib/constants';
+import { ASSISTANT_ID, DEFAULT_VOICE, VAPI_FALLBACK_VOICE, VOICE_SETTINGS } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
 import { IBook, Messages } from '@/types';
 import { startVoiceSession, endVoiceSession, saveSessionTurn } from '@/lib/actions/session.actions';
@@ -369,7 +369,16 @@ export function useVapi(book: IBook) {
                         useSpeakerBoost: VOICE_SETTINGS.useSpeakerBoost,
                     },
                 }
-                : {};
+                // Vapi's own TTS. Sent explicitly rather than falling back to the
+                // dashboard voice, because the dashboard assistant is still set to
+                // ElevenLabs and would drop the call without that credential.
+                : {
+                    voice: {
+                        provider: 'vapi' as const,
+                        voiceId: VAPI_FALLBACK_VOICE.voiceId,
+                        language: VAPI_FALLBACK_VOICE.language,
+                    },
+                };
 
             await getVapi().start(ASSISTANT_ID, {
                 firstMessage,

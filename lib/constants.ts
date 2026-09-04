@@ -43,6 +43,16 @@ export const VOICE_SETTINGS = {
     speed: 1.0, // Natural conversation speed
 };
 
+// Fallback TTS used while ElevenLabs is not connected in the Vapi dashboard.
+// Vapi's own voice provider ships with the platform and needs no third-party
+// credential, so the call cannot fail with assistant.voice.requestFailed.
+// Set NEXT_PUBLIC_ELEVENLABS_ENABLED=true to switch back to the ElevenLabs
+// voices in `voiceOptions` above (requires the ElevenLabs key in Vapi).
+export const VAPI_FALLBACK_VOICE = {
+    voiceId: 'Clara',
+    language: 'es-MX', // Latin American Spanish; the agent speaks only Spanish
+} as const;
+
 // VAPI configuration for natural conversation
 // NOTE: These settings should be configured in the VAPI Dashboard for the assistant
 // They are kept here for reference and documentation purposes
