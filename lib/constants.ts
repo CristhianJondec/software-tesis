@@ -48,9 +48,14 @@ export const VOICE_SETTINGS = {
 // credential, so the call cannot fail with assistant.voice.requestFailed.
 // Set NEXT_PUBLIC_ELEVENLABS_ENABLED=true to switch back to the ElevenLabs
 // voices in `voiceOptions` above (requires the ElevenLabs key in Vapi).
+// NOTE: no `language` field on purpose. Vapi rejected es-MX with
+// `unsupported_language`: the language list in the SDK types covers every voice
+// provider, not what this particular voice supports. Without the field the voice
+// falls back to its default and still reads the Spanish text — with an anglophone
+// accent. That is acceptable for a smoke test, NOT for the study sessions:
+// connect ElevenLabs (or another Spanish TTS) before running them.
 export const VAPI_FALLBACK_VOICE = {
     voiceId: 'Clara',
-    language: 'es-MX', // Latin American Spanish; the agent speaks only Spanish
 } as const;
 
 // VAPI configuration for natural conversation

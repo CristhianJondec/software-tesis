@@ -376,7 +376,6 @@ export function useVapi(book: IBook) {
                     voice: {
                         provider: 'vapi' as const,
                         voiceId: VAPI_FALLBACK_VOICE.voiceId,
-                        language: VAPI_FALLBACK_VOICE.language,
                     },
                 };
 
