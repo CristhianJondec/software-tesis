@@ -20,7 +20,7 @@
  *
  * 2. ANSWER RELEVANCY — fiel al algoritmo original.
  *    El juez genera N preguntas para las que la respuesta sería adecuada; se
- *    embeben con el mismo modelo del retriever (Gemini text-embedding-004) y se
+ *    embeben con el mismo modelo del retriever (Gemini gemini-embedding-001) y se
  *    promedia su similitud coseno con la pregunta real. Una respuesta evasiva
  *    ("no lo sé") puntúa 0. DESVÍO: la implementación oficial usa por defecto
  *    N = 3 y el modelo de embeddings de OpenAI; aquí N = 3 con el embebedor ya

@@ -88,7 +88,7 @@ export const RETRIEVER_TOP_K = 5;
 // it was among the top-K nearest: it is better for the agent to say "that is
 // not in your document" than to reason over the least-bad segments.
 //
-// CALIBRATION CRITERION: with Gemini text-embedding-004, a query paraphrasing a
+// CALIBRATION CRITERION: with Gemini gemini-embedding-001, a query paraphrasing a
 // passage of the same document lands around 0.30-0.45, while an off-topic query
 // (asking about cryptocurrencies in an education thesis) lands above 0.70. 0.6
 // sits in that gap, closer to the noise side so that a legitimate but loosely

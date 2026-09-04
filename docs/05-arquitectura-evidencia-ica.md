@@ -54,7 +54,7 @@ Cierra con el cálculo: `ICA = (5/5) × 100 = 100%`.
 La investigación dejó abierto qué LLM, qué embeddings y qué base vectorial usar. Aquí se cierra, y
 cada elección necesita su razón:
 
-- **Gemini `text-embedding-004`, 768 dimensiones** — rendimiento en español, distinción
+- **Gemini `gemini-embedding-001`, 768 dimensiones** — rendimiento en español, distinción
   entre `RETRIEVAL_DOCUMENT` y `RETRIEVAL_QUERY`.
 - **pgvector con índice HNSW** — evita sumar un servicio externo de base vectorial.
 - **Segmentación de 500 palabras con solape de 50** — justifica el tamaño y qué pasa con el

@@ -175,7 +175,16 @@ Es una diferencia relevante para el jurado: el ICA es **derivado y auditable**, 
 La investigación deja abiertas varias elecciones de implementación. Aquí se cierran, y cada una
 lleva su razón.
 
-### 4.1 Embeddings: Gemini `text-embedding-004`, 768 dimensiones
+### 4.1 Embeddings: Gemini `gemini-embedding-001`, 768 dimensiones
+
+> **Cambio de modelo (2026-09-04).** El proyecto usaba `text-embedding-004`. Google lo retiró:
+> la API responde `404 NOT_FOUND` para ese modelo, lo que hacía fallar toda la ingesta.
+> Se reemplazó por `gemini-embedding-001`, que acepta la misma `outputDimensionality: 768`, de
+> modo que `book_segments.embedding` y su índice HNSW **no cambiaron**. Consecuencia a tener en
+> cuenta: el umbral de relevancia del retriever debe calibrarse **con este modelo**, porque la
+> distribución de distancias no es necesariamente la misma que la del modelo anterior (ver §5.4).
+> A dimensiones distintas de 3072 estos vectores no vienen normalizados; es irrelevante aquí
+> porque la búsqueda usa distancia coseno, que es invariante a la escala.
 
 - **Rendimiento en español.** El corpus, las preguntas y las respuestas son en español; el
   modelo es multilingüe y no obliga a traducir nada.
@@ -302,7 +311,7 @@ se hubiera ejecutado la librería `ragas`**. En detalle, métrica por métrica:
 | Métrica | Fidelidad al algoritmo original | Desvío |
 |---|---|---|
 | **Faithfulness** | Fiel | Ninguno relevante. El juez descompone la respuesta en afirmaciones atómicas **sin ver el contexto** y, en una segunda llamada, verifica cada una contra el contexto recuperado. La separación en dos llamadas es deliberada: un juez que viera el contexto al extraer extraería justamente lo que el contexto respalda. |
-| **Answer relevancy** | Fiel | El juez genera N = 3 preguntas para las que la respuesta sería adecuada y se promedia su similitud coseno con la pregunta real. **Desvío menor:** la implementación oficial usa por defecto el embebedor de OpenAI; aquí se usa Gemini `text-embedding-004`, el mismo del retriever, para no introducir un segundo proveedor. |
+| **Answer relevancy** | Fiel | El juez genera N = 3 preguntas para las que la respuesta sería adecuada y se promedia su similitud coseno con la pregunta real. **Desvío menor:** la implementación oficial usa por defecto el embebedor de OpenAI; aquí se usa Gemini `gemini-embedding-001`, el mismo del retriever, para no introducir un segundo proveedor. |
 | **Context precision** | Fiel a la fórmula, distinta la referencia | Se calcula *average precision@K* sobre los fragmentos en el orden en que los devolvió el retriever. **Desvío:** la versión oficial juzga la utilidad de cada fragmento contra el `ground_truth`; aquí no existe una respuesta de referencia escrita a mano, así que se juzga contra la pregunta y la respuesta efectivamente dada. |
 | **Context recall** | **Adaptación — es el desvío más grande de los cuatro** | La versión oficial descompone el `ground_truth` en oraciones y mide cuántas son atribuibles al contexto recuperado. **Este proyecto no tiene ground truth**: las sustentaciones son conversaciones espontáneas, no un conjunto de datos anotado. En su lugar, el juez descompone la **pregunta** en los requisitos de información que exige y mide cuántos están cubiertos por el contexto recuperado. Mide lo mismo conceptualmente —"¿se recuperó lo necesario?"— pero **no es el mismo cálculo**, y así debe reportarse. |
 
@@ -416,7 +425,7 @@ Una métrica ausente declarada vale más que una inventada:
 ### 5.4 El umbral del retriever sigue sin calibrar
 
 `RETRIEVER_MAX_DISTANCE = 0.6` está **razonado pero no medido**. El criterio escrito en
-[lib/constants.ts](../lib/constants.ts) es que, con Gemini `text-embedding-004`, una consulta que
+[lib/constants.ts](../lib/constants.ts) es que, con Gemini `gemini-embedding-001`, una consulta que
 parafrasea un pasaje del mismo documento cae alrededor de 0.30–0.45, mientras que una consulta
 fuera de tema supera 0.70; 0.6 se ubica en esa brecha, del lado del ruido, para que una pregunta
 legítima pero mal formulada no se descarte en silencio.

@@ -2,7 +2,13 @@ import { GoogleGenAI } from '@google/genai';
 
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY!, httpOptions: { apiVersion: 'v1beta' } });
 
-const MODEL = 'text-embedding-004';
+// Google retired text-embedding-004 (the API now answers 404 NOT_FOUND for it).
+// gemini-embedding-001 replaces it and still accepts outputDimensionality: 768,
+// so book_segments.embedding and its HNSW index stay unchanged.
+// Note: at dimensions other than 3072 these vectors are NOT unit-normalized.
+// That is fine here because retrieval uses cosine distance, which is scale
+// invariant — but do not switch the index to inner product without normalizing.
+const MODEL = 'gemini-embedding-001';
 const BATCH_SIZE = 100;
 const DIMENSIONS = 768;
 

@@ -25,7 +25,7 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 - **Better Auth** (`lib/auth.ts`, `lib/session.ts`)
 - **Vapi Web SDK** (`@vapi-ai/web`) para voz — STT, LLM y TTS los orquesta Vapi
 - **ElevenLabs** para las voces (vía Vapi)
-- **Gemini `text-embedding-004`** para embeddings, 768 dimensiones
+- **Gemini `gemini-embedding-001`** para embeddings, 768 dimensiones
 - **Cloudflare R2** para PDFs y portadas
 - Tailwind v4 + shadcn/ui + sonner (toasts)
 
