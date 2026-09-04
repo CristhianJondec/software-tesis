@@ -4,7 +4,7 @@ import { LucideIcon } from 'lucide-react';
 import type { InferSelectModel } from 'drizzle-orm';
 import z from 'zod';
 import { UploadSchema } from '@/lib/zod';
-import { books, bookSegments, voiceSessions } from '@/database/schema';
+import { books, bookSegments, sessionTurns, turnRetrievals, voiceSessions } from '@/database/schema';
 import type { PlanType } from '@/lib/subscription-constants';
 
 // ============================================
@@ -14,6 +14,8 @@ import type { PlanType } from '@/lib/subscription-constants';
 export type IBook = InferSelectModel<typeof books>;
 export type IBookSegment = InferSelectModel<typeof bookSegments>;
 export type IVoiceSession = InferSelectModel<typeof voiceSessions>;
+export type ISessionTurn = InferSelectModel<typeof sessionTurns>;
+export type ITurnRetrieval = InferSelectModel<typeof turnRetrievals>;
 
 // ============================================
 // FORM & INPUT TYPES
@@ -30,6 +32,13 @@ export interface CreateBook {
     coverURL?: string;
     coverBlobKey?: string;
     fileSize: number;
+}
+
+/** One page of a parsed PDF, before segmentation. */
+export interface PdfPage {
+    /** 1-based, as shown to the reader. */
+    pageNumber: number;
+    text: string;
 }
 
 export interface TextSegment {
@@ -101,5 +110,28 @@ export interface StartSessionResult {
 
 export interface EndSessionResult {
     success: boolean;
+    error?: string;
+}
+
+export type TurnRole = 'assistant' | 'user';
+
+export interface SaveTurnInput {
+    sessionId: string;
+    turnIndex: number;
+    role: TurnRole;
+    content: string;
+    /** Epoch milliseconds. */
+    startedAt: number;
+    /** Epoch milliseconds. */
+    endedAt: number;
+    /** Only on student turns: end of the agent question -> student's first word. */
+    studentLatencyMs?: number | null;
+    /** Only on agent turns: end of the student turn -> start of the agent reply. */
+    systemLatencyMs?: number | null;
+}
+
+export interface SaveTurnResult {
+    success: boolean;
+    turnId?: string;
     error?: string;
 }

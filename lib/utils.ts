@@ -1,8 +1,8 @@
-import { TextSegment } from '@/types';
+import type { PdfPage } from '@/types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { DEFAULT_VOICE, voiceOptions } from './constants';
-
+import { splitIntoSegments } from './segmentation';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,46 +18,6 @@ export function generateSlug(text: string): string {
       .replace(/[\s_]+/g, '-') // Replace spaces and underscores with hyphens
       .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
 }
-
-// Splits text content into segments for storage and embedding
-export const splitIntoSegments = (
-    text: string,
-    segmentSize: number = 500, // Maximum words per segment
-    overlapSize: number = 50, // Words to overlap between segments for context
-): TextSegment[] => {
-  // Validate parameters to prevent infinite loops
-  if (segmentSize <= 0) {
-    throw new Error('segmentSize must be greater than 0');
-  }
-  if (overlapSize < 0 || overlapSize >= segmentSize) {
-    throw new Error('overlapSize must be >= 0 and < segmentSize');
-  }
-
-  const words = text.split(/\s+/).filter((word) => word.length > 0);
-  const segments: TextSegment[] = [];
-
-  let segmentIndex = 0;
-  let startIndex = 0;
-
-  while (startIndex < words.length) {
-    const endIndex = Math.min(startIndex + segmentSize, words.length);
-    const segmentWords = words.slice(startIndex, endIndex);
-    const segmentText = segmentWords.join(' ');
-
-    segments.push({
-      text: segmentText,
-      segmentIndex,
-      wordCount: segmentWords.length,
-    });
-
-    segmentIndex++;
-
-    if (endIndex >= words.length) break;
-    startIndex = endIndex - overlapSize;
-  }
-
-  return segments;
-};
 
 // Get voice data by persona key or voice ID
 export const getVoice = (persona?: string) => {
@@ -121,8 +81,9 @@ export async function parsePDFFile(file: File) {
     // Convert canvas to data URL
     const coverDataURL = canvas.toDataURL('image/png');
 
-    // Extract text from all pages
-    let fullText = '';
+    // Extract text from all pages, keeping each page separate so the page
+    // number survives until segmentation.
+    const pages: PdfPage[] = [];
 
     for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
       const page = await pdfDocument.getPage(pageNum);
@@ -131,11 +92,11 @@ export async function parsePDFFile(file: File) {
           .filter((item) => 'str' in item)
           .map((item) => (item as { str: string }).str)
           .join(' ');
-      fullText += pageText + '\n';
+      pages.push({ pageNumber: pageNum, text: pageText });
     }
 
     // Split text into segments for search
-    const segments = splitIntoSegments(fullText);
+    const segments = splitIntoSegments(pages);
 
     // Clean up PDF document resources
     await pdfDocument.destroy();

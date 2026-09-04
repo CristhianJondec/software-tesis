@@ -12,15 +12,17 @@ export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'im
 export const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 
 // 11Labs Voice IDs - Optimized for conversational AI
-// Voices selected for natural, engaging book conversations
+// Voices for the evaluating professor who leads the thesis defense.
+// Descriptions are shown to the student in VoiceSelector, so they are in Spanish.
+// Do NOT change the voice IDs.
 export const voiceOptions = {
     // Male voices
-    dave: { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Dave', description: 'Young male, British-Essex, casual & conversational' },
-    daniel: { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', description: 'Middle-aged male, British, authoritative but warm' },
-    chris: { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris', description: 'Male, casual & easy-going' },
+    dave: { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Dave', description: 'Docente joven, tono cercano y directo' },
+    daniel: { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', description: 'Docente de trayectoria, tono firme y sereno' },
+    chris: { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris', description: 'Docente de trato llano, ritmo pausado' },
     // Female voices
-    rachel: { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Young female, American, calm & clear' },
-    sarah: { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', description: 'Young female, American, soft & approachable' },
+    rachel: { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Docente de dicción clara, tono neutral y exigente' },
+    sarah: { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', description: 'Docente de tono medido, exigente sin dureza' },
 };
 
 // Voice categories for the selector UI
@@ -66,3 +68,36 @@ export const VAPI_DASHBOARD_CONFIG = {
 };
 
 
+// ============================================
+// RETRIEVER CONFIGURATION
+// ============================================
+// These two values are reported in the thesis as configuration parameters of
+// the retriever, so they live here as named constants instead of being buried
+// as literals inside the search code.
+
+// The segmentation parameters (window and overlap) live next to the code that
+// applies them, in lib/segmentation.ts.
+
+// Maximum number of segments handed to the LLM per retrieval.
+// 5 keeps the injected context under ~2500 words, which fits the assistant's
+// prompt budget while giving the model more than one page to cite from.
+export const RETRIEVER_TOP_K = 5;
+
+// Maximum cosine distance (0 = identical, 1 = orthogonal, 2 = opposite) for a
+// segment to be considered relevant. Anything above this is discarded, even if
+// it was among the top-K nearest: it is better for the agent to say "that is
+// not in your document" than to reason over the least-bad segments.
+//
+// CALIBRATION CRITERION: with Gemini text-embedding-004, a query paraphrasing a
+// passage of the same document lands around 0.30-0.45, while an off-topic query
+// (asking about cryptocurrencies in an education thesis) lands above 0.70. 0.6
+// sits in that gap, closer to the noise side so that a legitimate but loosely
+// worded question is not silently dropped.
+//
+// PROVISIONAL: this value has not yet been tuned against a real thesis PDF —
+// the database is still empty (see CLAUDE.md). To calibrate it, ingest a real
+// thesis, run ~10 on-topic and ~10 off-topic queries, log the `distance` column
+// of `turn_retrievals`, and move the threshold to the midpoint between the worst
+// on-topic distance and the best off-topic one. Record the final value and the
+// measurements in the thesis.
+export const RETRIEVER_MAX_DISTANCE = 0.6;

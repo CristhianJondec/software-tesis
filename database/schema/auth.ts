@@ -6,6 +6,9 @@ export const users = pgTable('users', {
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
+    // Thesis instrumentation: links this account with the external surveys.
+    participantCode: text('participant_code').unique(),
+    studyGroup: text('study_group'), // 'experimental' | 'control'
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

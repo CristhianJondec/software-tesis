@@ -10,7 +10,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { ASSISTANT_ID, DEFAULT_VOICE, VOICE_SETTINGS } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
 import { IBook, Messages } from '@/types';
-import { startVoiceSession, endVoiceSession } from '@/lib/actions/session.actions';
+import { startVoiceSession, endVoiceSession, saveSessionTurn } from '@/lib/actions/session.actions';
 
 export function useLatestRef<T>(value: T) {
     const ref = useRef(value);
@@ -58,6 +58,64 @@ export function useVapi(book: IBook) {
     const sessionIdRef = useRef<string | null>(null);
     const isStoppingRef = useRef(false);
 
+    // --- Turn instrumentation (refs only: these must not re-render the UI) ---
+    const turnIndexRef = useRef(0);
+    // Set when the agent stops speaking; consumed by the student's first word.
+    const agentSpeechEndAtRef = useRef<number | null>(null);
+    // Set on the student's final transcript; consumed by the agent's next speech-start.
+    const userFinalAtRef = useRef<number | null>(null);
+    const pendingStudentLatencyRef = useRef<number | null>(null);
+    const pendingSystemLatencyRef = useRef<number | null>(null);
+    const userTurnStartedAtRef = useRef<number | null>(null);
+    const agentTurnStartedAtRef = useRef<number | null>(null);
+    const lastSavedTurnRef = useRef<string | null>(null);
+
+    const resetTurnTracking = useCallback(() => {
+        turnIndexRef.current = 0;
+        agentSpeechEndAtRef.current = null;
+        userFinalAtRef.current = null;
+        pendingStudentLatencyRef.current = null;
+        pendingSystemLatencyRef.current = null;
+        userTurnStartedAtRef.current = null;
+        agentTurnStartedAtRef.current = null;
+        lastSavedTurnRef.current = null;
+    }, []);
+
+    // Persist a closed turn immediately. Fire and forget: a storage failure must
+    // never interrupt the conversation in progress.
+    const persistTurn = useCallback(
+        (role: 'assistant' | 'user', content: string, startedAt: number, endedAt: number) => {
+            const sessionId = sessionIdRef.current;
+            const trimmed = content?.trim();
+            if (!sessionId || !trimmed) return;
+
+            const fingerprint = role + '|' + trimmed;
+            if (lastSavedTurnRef.current === fingerprint) return;
+            lastSavedTurnRef.current = fingerprint;
+
+            const studentLatencyMs = role === 'user' ? pendingStudentLatencyRef.current : null;
+            const systemLatencyMs = role === 'assistant' ? pendingSystemLatencyRef.current : null;
+            if (role === 'user') pendingStudentLatencyRef.current = null;
+            if (role === 'assistant') pendingSystemLatencyRef.current = null;
+
+            saveSessionTurn({
+                sessionId,
+                turnIndex: turnIndexRef.current++,
+                role,
+                content: trimmed,
+                startedAt,
+                endedAt,
+                studentLatencyMs,
+                systemLatencyMs,
+            })
+                .then((res) => {
+                    if (!res.success) console.error('Failed to save session turn:', res.error);
+                })
+                .catch((err) => console.error('Failed to save session turn:', err));
+        },
+        [],
+    );
+
     // Keep refs in sync with latest values for use in callbacks
     const maxDurationSeconds = limits?.maxDurationPerSession ? limits.maxDurationPerSession * 60 : (15 * 60);
     const maxDurationRef = useLatestRef(maxDurationSeconds);
@@ -69,6 +127,7 @@ export function useVapi(book: IBook) {
         const handlers = {
             'call-start': () => {
                 isStoppingRef.current = false;
+                resetTurnTracking();
                 setStatus('starting'); // AI speaks first, wait for it
                 setCurrentMessage('');
                 setCurrentUserMessage('');
@@ -118,11 +177,23 @@ export function useVapi(book: IBook) {
             },
 
             'speech-start': () => {
+                const now = Date.now();
+                agentTurnStartedAtRef.current = now;
+
+                // System latency: student stopped talking -> agent starts replying.
+                if (userFinalAtRef.current !== null) {
+                    pendingSystemLatencyRef.current = now - userFinalAtRef.current;
+                    userFinalAtRef.current = null;
+                }
+
                 if (!isStoppingRef.current) {
                     setStatus('speaking');
                 }
             },
             'speech-end': () => {
+                // Starts the clock for the student's verbal response latency.
+                agentSpeechEndAtRef.current = Date.now();
+
                 if (!isStoppingRef.current) {
                     // After AI finishes speaking, user can talk
                     setStatus('listening');
@@ -139,6 +210,9 @@ export function useVapi(book: IBook) {
 
                 // User finished speaking → AI is thinking
                 if (message.role === 'user' && message.transcriptType === 'final') {
+                    // Marks the start of the system latency window.
+                    userFinalAtRef.current = Date.now();
+
                     if (!isStoppingRef.current) {
                         setStatus('thinking');
                     }
@@ -147,6 +221,18 @@ export function useVapi(book: IBook) {
 
                 // Partial user transcript → show real-time typing
                 if (message.role === 'user' && message.transcriptType === 'partial') {
+                    const now = Date.now();
+
+                    // Student latency: first word after the agent stopped speaking.
+                    // The marker is cleared so the same turn is never measured twice.
+                    if (agentSpeechEndAtRef.current !== null) {
+                        pendingStudentLatencyRef.current = now - agentSpeechEndAtRef.current;
+                        agentSpeechEndAtRef.current = null;
+                    }
+                    if (userTurnStartedAtRef.current === null) {
+                        userTurnStartedAtRef.current = now;
+                    }
+
                     setCurrentUserMessage(message.transcript);
                     return;
                 }
@@ -161,6 +247,20 @@ export function useVapi(book: IBook) {
                 if (message.transcriptType === 'final') {
                     if (message.role === 'assistant') setCurrentMessage('');
                     if (message.role === 'user') setCurrentUserMessage('');
+
+                    // Persist the closed turn right away, not at the end of the call.
+                    const endedAt = Date.now();
+                    if (message.role === 'user' || message.role === 'assistant') {
+                        const startedAt =
+                            (message.role === 'user'
+                                ? userTurnStartedAtRef.current
+                                : agentTurnStartedAtRef.current) ?? endedAt;
+
+                        persistTurn(message.role, message.transcript, startedAt, endedAt);
+
+                        if (message.role === 'user') userTurnStartedAtRef.current = null;
+                        else agentTurnStartedAtRef.current = null;
+                    }
 
                     setMessages((prev) => {
                         const isDupe = prev.some(
@@ -226,7 +326,7 @@ export function useVapi(book: IBook) {
             });
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, []);
+    }, [persistTurn, resetTurnTracking]);
 
     const start = useCallback(async () => {
         if (!userId) {
@@ -253,7 +353,9 @@ export function useVapi(book: IBook) {
             // Note: Server-returned maxDurationMinutes is informational only
             // The actual limit is enforced by useLatestRef(limits.maxSessionMinutes * 60)
 
-            const firstMessage = `Hola, un gusto conocerte. Antes de empezar, una pregunta rápida: ¿ya leíste "${book.title}" o estamos empezando desde cero?`;
+            // Opening of the thesis defense. Sent from here — not from the Vapi dashboard —
+            // because it interpolates the actual thesis title. See docs/agente/.
+            const firstMessage = `Buenas tardes. Formo parte del jurado que evaluará su avance de investigación, titulado "${book.title}". Le invito a exponer brevemente su trabajo: de qué trata, qué problema aborda y en qué punto se encuentra. Cuando termine, iniciaré las preguntas.`;
 
             const voiceOverride = process.env.NEXT_PUBLIC_ELEVENLABS_ENABLED === 'true'
                 ? {
@@ -275,6 +377,9 @@ export function useVapi(book: IBook) {
                     title: book.title,
                     author: book.author,
                     bookId: book.id,
+                    // Comes back on every searchBook tool call so the webhook can
+                    // link the retrieved segments to this session.
+                    sessionId: result.sessionId ?? '',
                 },
 ...voiceOverride,
             });

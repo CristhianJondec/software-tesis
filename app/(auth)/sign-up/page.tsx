@@ -38,7 +38,7 @@ export default function SignUpPage() {
         <Card>
             <CardHeader>
                 <CardTitle className="text-2xl font-serif">Crear cuenta</CardTitle>
-                <CardDescription>Empieza a chatear con tus tesis</CardDescription>
+                <CardDescription>Empieza a chatear con tus investigaciones</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
                 <Button type="button" variant="outline" onClick={handleGoogle} disabled={isPending}>

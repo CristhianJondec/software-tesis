@@ -77,7 +77,7 @@ const UploadForm = () => {
 
     const onSubmit = async (data: BookUploadFormValues) => {
         if(!userId) {
-           return toast.error("Por favor inicia sesión para subir tesis");
+           return toast.error("Por favor inicia sesión para subir investigación");
         }
 
         setIsSubmitting(true);
@@ -88,7 +88,7 @@ const UploadForm = () => {
             const existsCheck = await checkBookExists(data.title);
 
             if(existsCheck.exists && existsCheck.book) {
-                toast.info("Ya existe una tesis con el mismo título.");
+                toast.info("Ya existe una investigación con el mismo título.");
                 form.reset()
                 router.push(`/books/${existsCheck.book.slug}`)
                 return;
@@ -130,7 +130,7 @@ const UploadForm = () => {
             });
 
             if(!book.success) {
-                toast.error(book.error as string || "Error al crear la tesis");
+                toast.error(book.error as string || "Error al crear la investigación");
                 if (book.isBillingError) {
                     router.push("/subscriptions");
                 }
@@ -138,7 +138,7 @@ const UploadForm = () => {
             }
 
             if(book.alreadyExists) {
-                toast.info("Ya existe una tesis con el mismo título.");
+                toast.info("Ya existe una investigación con el mismo título.");
                 form.reset()
                 router.push(`/books/${book.data!.slug}`)
                 return;
@@ -147,7 +147,7 @@ const UploadForm = () => {
             const segments = await saveBookSegments(book.data!.id, parsedPDF.content);
 
             if(!segments.success) {
-                toast.error("Error al guardar los segmentos de la tesis");
+                toast.error("Error al guardar los segmentos de la investigación");
                 throw new Error("Failed to save book segments");
             }
 
@@ -156,7 +156,7 @@ const UploadForm = () => {
         } catch (error) {
             console.error(error);
 
-            toast.error("Error al subir la tesis. Inténtalo más tarde.");
+            toast.error("Error al subir la investigación. Inténtalo más tarde.");
         } finally {
             setIsSubmitting(false);
         }
@@ -175,7 +175,7 @@ const UploadForm = () => {
                         <FileUploader
                             control={form.control}
                             name="pdfFile"
-                            label="Archivo PDF de la tesis"
+                            label="Archivo PDF de la investigación"
                             acceptTypes={ACCEPTED_PDF_TYPES}
                             icon={Upload}
                             placeholder="Haz clic para subir el PDF"

@@ -20,7 +20,7 @@ const monaSans = Mona_Sans({
 
 export const metadata: Metadata = {
   title: "Tesified",
-  description: "Transforma tus tesis en conversaciones interactivas con IA. Sube PDFs y chatea con tus tesis usando tu voz.",
+  description: "Transforma tus investigaciones en conversaciones interactivas con IA. Sube PDFs y chatea con tus investigaciones usando tu voz.",
 };
 
 export default function RootLayout({

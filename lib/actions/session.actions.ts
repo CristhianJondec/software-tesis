@@ -5,11 +5,11 @@ import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
-import { books, voiceSessions } from '@/database/schema';
+import { books, sessionTurns, voiceSessions } from '@/database/schema';
 import { requireUser } from '@/lib/session';
 import { PLAN_LIMITS, getCurrentBillingPeriodStart } from '@/lib/subscription-constants';
 import { getUserPlan } from '@/lib/subscription.server';
-import type { EndSessionResult, StartSessionResult } from '@/types';
+import type { EndSessionResult, SaveTurnInput, SaveTurnResult, StartSessionResult } from '@/types';
 
 export const startVoiceSession = async (bookId: string): Promise<StartSessionResult> => {
     try {
@@ -91,5 +91,57 @@ export const endVoiceSession = async (
     } catch (e) {
         console.error('Error ending voice session', e);
         return { success: false, error: 'Failed to end voice session. Please try again later.' };
+    }
+};
+
+/**
+ * Persists a single conversation turn as soon as it closes, so a tab close or a
+ * dropped connection cannot take the evidence with it. Callers fire and forget:
+ * a failure here must never interrupt the live conversation.
+ */
+export const saveSessionTurn = async (input: SaveTurnInput): Promise<SaveTurnResult> => {
+    try {
+        const user = await requireUser();
+
+        const content = input.content?.trim();
+        if (!input.sessionId || !content) {
+            return { success: false, error: 'Missing sessionId or content' };
+        }
+        if (input.role !== 'assistant' && input.role !== 'user') {
+            return { success: false, error: 'Invalid role' };
+        }
+
+        const ownerCheck = await db
+            .select({ id: voiceSessions.id })
+            .from(voiceSessions)
+            .where(and(eq(voiceSessions.id, input.sessionId), eq(voiceSessions.userId, user.id)))
+            .limit(1);
+
+        if (ownerCheck.length === 0) {
+            return { success: false, error: 'Voice session not found or unauthorized' };
+        }
+
+        const endedAt = new Date(input.endedAt);
+        const startedAt = new Date(input.startedAt ?? input.endedAt);
+
+        const [turn] = await db
+            .insert(sessionTurns)
+            .values({
+                id: nanoid(),
+                sessionId: input.sessionId,
+                turnIndex: input.turnIndex,
+                role: input.role,
+                content,
+                startedAt,
+                endedAt,
+                studentLatencyMs: input.role === 'user' ? (input.studentLatencyMs ?? null) : null,
+                systemLatencyMs: input.role === 'assistant' ? (input.systemLatencyMs ?? null) : null,
+            })
+            .returning({ id: sessionTurns.id });
+
+        return { success: true, turnId: turn.id };
+    } catch (e) {
+        console.error('Error saving session turn', e);
+        return { success: false, error: 'Failed to save session turn.' };
     }
 };

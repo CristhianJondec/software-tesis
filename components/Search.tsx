@@ -38,7 +38,7 @@ const Search = () => {
             </div>
             <Input
                 type="text"
-                placeholder="Buscar tesis por título o autor"
+                placeholder="Buscar investigación por título o autor"
                 className="library-search-input border-none shadow-none focus-visible:ring-0"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

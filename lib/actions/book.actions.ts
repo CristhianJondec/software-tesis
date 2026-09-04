@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
 import { books, bookSegments } from '@/database/schema';
+import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
 import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
 import { PLAN_LIMITS } from '@/lib/subscription-constants';
@@ -184,8 +185,16 @@ export const saveBookSegments = async (bookId: string, segments: TextSegment[]) 
     }
 };
 
-// Semantic search via pgvector cosine distance over Gemini embeddings
-export const searchBookSegments = async (bookId: string, query: string, limit: number = 5) => {
+// Semantic search via pgvector cosine distance over Gemini embeddings.
+// `limit` and `maxDistance` default to the retriever parameters declared in
+// lib/constants.ts (RETRIEVER_TOP_K, RETRIEVER_MAX_DISTANCE), which is where the
+// values and their calibration criterion are documented.
+export const searchBookSegments = async (
+    bookId: string,
+    query: string,
+    limit: number = RETRIEVER_TOP_K,
+    maxDistance: number = RETRIEVER_MAX_DISTANCE,
+) => {
     try {
         console.log(`Searching for: "${query}" in book ${bookId}`);
 
@@ -200,15 +209,25 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
                 segmentIndex: bookSegments.segmentIndex,
                 pageNumber: bookSegments.pageNumber,
                 wordCount: bookSegments.wordCount,
+                // Cosine distance to the query: needed to score retrieval quality.
+                distance,
             })
             .from(bookSegments)
             .where(eq(bookSegments.bookId, bookId))
             .orderBy(distance)
             .limit(limit);
 
-        console.log(`Search complete. Found ${results.length} results`);
+        // Relevance cut-off. Ordering alone always yields `limit` rows, so without
+        // this the caller receives the least-bad segments for a question the
+        // document does not answer. Applied after the ordered query so the HNSW
+        // index still drives the scan.
+        const relevant = results.filter((row) => Number(row.distance) <= maxDistance);
 
-        return { success: true, data: results };
+        console.log(
+            `Search complete. ${results.length} nearest, ${relevant.length} within distance ${maxDistance}`,
+        );
+
+        return { success: true, data: relevant };
     } catch (error) {
         console.error('Error searching segments:', error);
         return { success: false, error: (error as Error).message, data: [] };

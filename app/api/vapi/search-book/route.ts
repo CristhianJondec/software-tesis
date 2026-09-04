@@ -1,9 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 
 import { searchBookSegments } from '@/lib/actions/book.actions';
+import { RETRIEVER_TOP_K } from '@/lib/constants';
+import { recordTurnRetrievals } from '@/lib/retrievals';
+
+// Normalize an optional string argument coming from the Vapi tool call.
+// `sessionId` is optional on purpose: the tool schema in the Vapi dashboard may
+// not declare it yet (see docs/02). Without it retrievals simply go unrecorded.
+function optionalString(value: unknown): string | null {
+    if (value == null) return null;
+    const str = String(value).trim();
+    if (!str || str === 'null' || str === 'undefined') return null;
+    return str;
+}
 
 // Helper function to process book search logic
-async function processBookSearch(bookId: unknown, query: unknown) {
+async function processBookSearch(bookId: unknown, query: unknown, sessionId: unknown) {
     // Validate inputs before conversion to prevent null/undefined becoming "null"/"undefined" strings
     if (bookId == null || query == null || query === '') {
         return { result: 'Missing bookId or query' };
@@ -18,17 +30,51 @@ async function processBookSearch(bookId: unknown, query: unknown) {
         return { result: 'Missing bookId or query' };
     }
 
-    // Execute search
-    const searchResult = await searchBookSegments(bookIdStr, queryStr, 3);
+    // Execute search. `searchBookSegments` already drops anything past the
+    // relevance threshold, so an empty result means the document does not cover
+    // the topic -- not that the search failed.
+    const searchResult = await searchBookSegments(bookIdStr, queryStr, RETRIEVER_TOP_K);
 
-    // Return results
+    // Return results. This message is in Spanish because the LLM reads it and
+    // the agent speaks Spanish: it has to say it out loud to the student.
     if (!searchResult.success || !searchResult.data?.length) {
-        return { result: 'No information found about this topic in the book.' };
+        return {
+            result:
+                'No hay ningún fragmento relevante sobre ese tema en el documento del estudiante. ' +
+                'Dilo explícitamente: el tema no aparece en la investigación. No inventes contenido ni cites páginas.',
+        };
     }
 
-    const combinedText = searchResult.data
-        .map((segment) => (segment as { content: string }).content)
+    const segments = searchResult.data as Array<{
+        id: string;
+        content: string;
+        pageNumber: number | null;
+        distance: number;
+    }>;
+
+    // Prefix each fragment with its page so the LLM can cite "en la página X".
+    const combinedText = segments
+        .map((segment) =>
+            segment.pageNumber != null
+                ? `[Página ${segment.pageNumber}] ${segment.content}`
+                : segment.content,
+        )
         .join('\n\n');
+
+    // Persist the evidence AFTER the response is built: Vapi must be answered fast.
+    const sessionIdStr = optionalString(sessionId);
+    if (sessionIdStr) {
+        after(
+            recordTurnRetrievals(
+                sessionIdStr,
+                queryStr,
+                segments.map((segment) => ({
+                    segmentId: segment.id,
+                    distance: Number(segment.distance),
+                })),
+            ),
+        );
+    }
 
     return { result: combinedText };
 }
@@ -62,7 +108,7 @@ export async function POST(request: Request) {
             const parsed = parseArgs(parameters);
 
             if (name === 'searchBook') {
-                const result = await processBookSearch(parsed.bookId, parsed.query);
+                const result = await processBookSearch(parsed.bookId, parsed.query, parsed.sessionId);
                 return NextResponse.json(result);
             }
 
@@ -84,7 +130,7 @@ export async function POST(request: Request) {
             const args = parseArgs(func?.arguments);
 
             if (name === 'searchBook') {
-                const searchResult = await processBookSearch(args.bookId, args.query);
+                const searchResult = await processBookSearch(args.bookId, args.query, args.sessionId);
                 results.push({ toolCallId: id, ...searchResult });
             } else {
                 results.push({ toolCallId: id, result: `Unknown function: ${name}` });

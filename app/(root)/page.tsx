@@ -15,7 +15,7 @@ const Page = async ({ searchParams }: { searchParams: Promise<{ query?: string }
             <HeroSection />
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 mb-10">
-                <h2 className="text-3xl font-serif font-bold text-[#212a3b]">Tesis Recientes</h2>
+                <h2 className="text-3xl font-serif font-bold text-[#212a3b]">Investigaciones Recientes</h2>
                 <Search />
             </div>
 

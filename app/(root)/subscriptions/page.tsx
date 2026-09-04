@@ -15,7 +15,7 @@ export default function SubscriptionsPage() {
       <div className="flex flex-col items-center text-center mb-10">
         <h1 className="text-4xl font-bold font-serif mb-4">Elige Tu Plan</h1>
         <p className="text-muted-foreground max-w-2xl">
-          Mejora tu plan para desbloquear más tesis, sesiones más largas y funciones avanzadas.
+          Mejora tu plan para desbloquear más investigaciones, sesiones más largas y funciones avanzadas.
         </p>
       </div>
 
@@ -33,7 +33,7 @@ export default function SubscriptionsPage() {
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">
                         <ul className="text-sm text-muted-foreground space-y-2">
-                            <li>Hasta {limits.maxBooks} tesis</li>
+                            <li>Hasta {limits.maxBooks} investigaciones</li>
                             <li>
                                 {limits.maxSessionsPerMonth === Infinity
                                     ? 'Sesiones ilimitadas / mes'
