@@ -1,173 +1,277 @@
-# Gestión del proyecto con metodología Scrum
 
-**Proyecto:** Agente conversacional por voz con RAG para la simulación de sustentaciones de avances de investigación  
-**Institución:** Universidad Nacional de Trujillo  
-**Periodo de trabajo:** 1 de abril al 30 de agosto de 2026  
-**Modalidad:** Scrum individual  
-**Versión del documento:** 1.0
+**UNIVERSIDAD NACIONAL DE TRUJILLO**
 
-> Este documento presenta la planificación y el seguimiento académico del proyecto bajo Scrum.
-> Las fechas corresponden al periodo de desarrollo declarado para el proyecto. Los valores de las
-> métricas de evaluación deben completarse con mediciones reales, no con estimaciones.
+**FACULTAD DE INGENIERÍA**
 
-## 1. Visión del producto
+**ESCUELA ACADÉMICO PROFESIONAL DE INGENIERÍA DE SISTEMAS**
 
-Desarrollar una aplicación web que permita a un estudiante cargar su avance de investigación en
-PDF y practicar una sustentación mediante una conversación de voz. El agente asume el rol de
-docente evaluador, formula preguntas en español y utiliza recuperación aumentada por generación
-(RAG) para anclar sus intervenciones en el documento del estudiante.
+**BOOKIFIED: SISTEMA CONVERSACIONAL POR VOZ CON RAG**  
+**PARA LA SIMULACIÓN DE SUSTENTACIONES DE INVESTIGACIÓN**
 
-### Objetivo del producto
+*METODOLOGÍA SCRUM — PRODUCT BACKLOG, HISTORIAS DE USUARIO Y SPRINTS*
 
-Entregar un prototipo funcional que integre voz en tiempo real, procesamiento de documentos,
-base de datos vectorial, recuperación de contexto y registro de evidencias para evaluar la
-calidad de las sesiones.
+**AUTOR:**
 
-### Usuarios y partes interesadas
+[Nombre del estudiante]
 
-- **Estudiante:** carga su investigación y practica la sustentación.
-- **Investigador/desarrollador:** configura el sistema y revisa las sesiones y métricas.
-- **Asesor o jurado:** consulta la evidencia técnica y los resultados del prototipo.
+**DOCENTE:**
 
-## 2. Aplicación de Scrum en un proyecto individual
+[Nombre del docente]
 
-Al tratarse de un trabajo individual, una misma persona asumió los tres roles de Scrum, manteniendo
-separadas sus responsabilidades durante cada sprint:
+**TRUJILLO – PERÚ**
 
-| Rol Scrum | Responsable | Responsabilidad |
-|---|---|---|
-| Product Owner | Desarrollador | Definir el valor, priorizar el Product Backlog y validar los incrementos. |
-| Scrum Master | Desarrollador | Organizar los sprints, retirar impedimentos y registrar las retrospectivas. |
-| Developer | Desarrollador | Analizar, diseñar, programar, probar y documentar el producto. |
+01/09/2026
 
-La planificación se organizó en sprints de dos semanas, con una revisión y una retrospectiva al
-cierre de cada sprint. La capacidad estimada fue de una persona, por lo que se priorizó primero
-el flujo mínimo funcional y después la instrumentación para la investigación.
+> **Periodo de desarrollo considerado:** abril a agosto de 2026.
 
-## 3. Product Backlog
+**ÍNDICE**  
+[1. Product Vision Board](#1-product-vision-board)
 
-La prioridad utiliza `P0` para funcionalidades imprescindibles, `P1` para funcionalidades
-importantes y `P2` para mejoras. Los puntos de historia siguen una escala relativa de Fibonacci.
+[2. Actores del negocio](#2-actores-del-negocio)
 
-| ID | Historia de usuario | Prioridad | Puntos | Criterio de aceptación resumido | Estado |
-|---|---|---:|---:|---|---|
-| PB-01 | Como estudiante, quiero registrarme e iniciar sesión para proteger mi investigación. | P0 | 3 | El acceso funciona y las rutas privadas exigen una sesión válida. | Terminado |
-| PB-02 | Como estudiante, quiero cargar un PDF de investigación para usarlo en la práctica. | P0 | 5 | El PDF se valida, almacena y muestra en la biblioteca del usuario. | Terminado |
-| PB-03 | Como sistema, quiero extraer y segmentar el PDF para preparar su contenido. | P0 | 5 | El texto se extrae por páginas y se divide en segmentos de 500 palabras con solape de 50. | Terminado |
-| PB-04 | Como sistema, quiero generar embeddings y guardarlos en una base vectorial. | P0 | 8 | Cada segmento queda asociado al documento y puede consultarse por similitud coseno. | Terminado |
-| PB-05 | Como estudiante, quiero hacer preguntas sobre mi documento y recibir contexto relevante. | P0 | 8 | El retriever devuelve los mejores fragmentos, aplica top-K y descarta resultados bajo el umbral. | Terminado |
-| PB-06 | Como estudiante, quiero conversar por voz con el sistema en tiempo real. | P0 | 8 | La sesión integra STT, LLM y TTS, y permite iniciar y finalizar una conversación. | Terminado |
-| PB-07 | Como estudiante, quiero que el agente actúe como docente evaluador. | P0 | 5 | El agente pregunta sobre problema, metodología, resultados y conclusiones con tono académico. | Terminado |
-| PB-08 | Como estudiante, quiero que las preguntas estén ancladas en mi investigación. | P0 | 5 | Antes de preguntar sobre contenido, el agente consulta `searchBook`; si no hay contexto, no inventa. | Terminado |
-| PB-09 | Como usuario, quiero conversar en español y seleccionar una voz. | P1 | 3 | La configuración usa español y permite elegir una voz disponible antes de la sesión. | Terminado |
-| PB-10 | Como investigador, quiero guardar cada sesión, turno y fragmento recuperado. | P0 | 8 | Se persisten hablante, contenido, tiempos, latencias y evidencia recuperada. | Terminado |
-| PB-11 | Como investigador, quiero medir la latencia del sistema y del estudiante. | P1 | 5 | Se calculan LP y latencia verbal del estudiante por sesión y participante. | Terminado |
-| PB-12 | Como investigador, quiero evaluar manualmente la precisión de las respuestas. | P1 | 5 | Una pantalla permite marcar respuestas correctas o incorrectas y añadir observaciones. | Terminado |
-| PB-13 | Como investigador, quiero calcular RAGAs para valorar el anclaje documental. | P1 | 8 | Se calculan las métricas sobre pregunta, contexto y respuesta persistidos. | Terminado |
-| PB-14 | Como investigador, quiero consultar y exportar las métricas del proyecto. | P1 | 5 | `/metrics` muestra ICA, PR, LP y RAGAs, y permite exportar los datos en CSV. | Terminado |
-| PB-15 | Como jurado, quiero consultar la arquitectura y su evidencia técnica. | P1 | 3 | Existe documentación trazable del flujo, componentes, decisiones y limitaciones. | Terminado |
-| PB-16 | Como investigador, quiero identificar al participante y grupo de estudio. | P1 | 3 | El usuario puede asociarse a un código de participante y grupo experimental o control. | Terminado |
+[3. Roles de Scrum](#3-roles-de-scrum)
 
-**Total estimado:** 87 puntos de historia.  
-**Incremento mínimo viable:** PB-01 a PB-08.  
-**Incremento final:** PB-01 a PB-16, con documentación y pruebas de las funciones críticas.
+[4. Identificación de procesos](#4-identificación-de-procesos)
 
-## 4. Sprint Backlog y calendario
+[5. Identificación de requerimientos](#5-identificación-de-requerimientos)
 
-| Sprint | Fechas | Objetivo del sprint | Historias principales | Incremento entregado |
-|---|---|---|---|---|
-| S0 | 01–05 abril | Preparar el producto y validar el alcance. | Visión, riesgos y backlog inicial | Alcance definido, arquitectura inicial y criterios de aceptación. |
-| S1 | 06–19 abril | Construir la base de la aplicación. | PB-01 | Autenticación, sesiones y estructura base de la interfaz. |
-| S2 | 20 abril–03 mayo | Permitir gestionar investigaciones. | PB-02 | Carga, almacenamiento y visualización de documentos PDF. |
-| S3 | 04–17 mayo | Preparar el contenido para RAG. | PB-03, PB-04 | Extracción, segmentación, embeddings y persistencia vectorial. |
-| S4 | 18–31 mayo | Implementar la conversación de voz. | PB-06, PB-09 | Sesión de voz con STT, LLM, TTS, selección de voz y transcripción. |
-| S5 | 01–14 junio | Convertir el asistente en evaluador académico. | PB-07, PB-08 | Prompt del docente evaluador, búsqueda obligatoria y respuestas en español. |
-| S6 | 15–28 junio | Generar evidencia de cada conversación. | PB-10, PB-16 | Sesiones, turnos, recuperaciones, código de participante y latencias. |
-| S7 | 29 junio–12 julio | Mejorar la trazabilidad y calidad del retriever. | PB-05 | Páginas de origen, top-K configurable y umbral de relevancia. |
-| S8 | 13–26 julio | Implementar evaluación de respuestas. | PB-11, PB-12 | Cálculo de latencias y revisión manual de precisión. |
-| S9 | 27 julio–09 agosto | Integrar las métricas de investigación. | PB-13, PB-14 | ICA, PR, LP, RAGAs, pantalla `/metrics` y exportación CSV. |
-| S10 | 10–23 agosto | Consolidar el producto y la evidencia. | PB-15, ajustes PB-01–PB-14 | Pruebas integrales, correcciones, documentación de arquitectura y limitaciones. |
-| S11 | 24–30 agosto | Preparar la entrega final. | Correcciones finales y revisión del incremento | Versión candidata, respaldo de evidencias y cierre del proyecto. |
+[Requerimientos funcionales](#requerimientos-funcionales)
 
-## 5. Ceremonias y artefactos
+[Requerimientos no funcionales](#requerimientos-no-funcionales)
 
-### Sprint Planning
+[6. Historias de usuario](#6-historias-de-usuario)
 
-Al inicio de cada sprint se seleccionaron historias según prioridad, dependencias y capacidad de
-una persona. Cada historia se dividió en tareas técnicas, de prueba y de documentación.
+[7. Product backlog priorizado](#7-product-backlog-priorizado)
 
-### Daily Scrum
+[8. Estimación del product backlog](#8-estimación-del-product-backlog)
 
-Se realizó un seguimiento breve y personal con tres preguntas: qué se completó, qué se haría a
-continuación y qué impedimento debía resolverse. Los impedimentos se registraron como decisiones
-técnicas o tareas pendientes.
+# **1. Product Vision Board**
 
-### Sprint Review
+Bookified es una plataforma web que permite al estudiante cargar un avance de investigación en
+formato PDF y practicar su sustentación mediante una conversación por voz. El sistema procesa el
+documento, lo divide en fragmentos, genera representaciones vectoriales y recupera el contexto
+relevante para que un agente conversacional formule preguntas relacionadas con la investigación.
 
-Al cierre de cada sprint se verificó el incremento ejecutando el flujo disponible: iniciar sesión,
-cargar un PDF, iniciar una sesión de voz, recuperar contexto y revisar la evidencia generada.
+El agente asume el rol de docente evaluador de una sustentación de avance. La solución integra
+reconocimiento de voz (STT), un modelo de lenguaje (LLM), una base de datos vectorial, un retriever
+y síntesis de voz (TTS). Además, registra las sesiones, turnos, latencias y fragmentos recuperados
+para producir evidencia medible para la investigación.
 
-### Sprint Retrospective
+*Tabla 1. Product Vision Board*
 
-Se revisó qué funcionó, qué debía mejorarse y qué acción concreta se incorporaría al siguiente
-sprint. En un equipo individual, esta ceremonia permitió evitar que la programación desplazara las
-pruebas y la documentación.
+| Bookified | Usuarios | Necesidades | Producto | Valor |
+| ----- | ----- | ----- | ----- | ----- |
+| **Sistema conversacional por voz con RAG para practicar sustentaciones de investigación** | Estudiantes que preparan una sustentación. Investigadores que necesitan registrar y evaluar sesiones. Asesores o jurados que revisan la evidencia del prototipo. | Cargar una investigación. Practicar preguntas académicas por voz. Recibir preguntas ancladas en el propio documento. Consultar transcripciones, latencias y métricas. | Biblioteca de investigaciones. Procesamiento PDF con segmentación y embeddings. Retriever con búsqueda vectorial, top-K y umbral. Agente evaluador en español mediante Vapi. Persistencia de sesiones y módulo `/metrics`. | Mayor preparación y confianza para la sustentación. Retroalimentación basada en el documento real. Trazabilidad del contexto usado por el agente. Evidencia cuantitativa para evaluar el sistema. |
 
-## 6. Definition of Ready
+# **2. Actores del negocio**
 
-Una historia podía entrar a un sprint cuando tenía un objetivo claro, criterios de aceptación
-verificables, prioridad definida, dependencias identificadas y una estimación en puntos de historia.
+*Tabla 2. Actores del negocio*
 
-## 7. Definition of Done
+| Actor del negocio | Descripción |
+| :---: | ----- |
+| **Estudiante** | Se registra, carga su avance de investigación, selecciona una voz e inicia una sesión de práctica. Responde las preguntas del agente y consulta la transcripción de la conversación. |
+| **Investigador** | Configura el sistema, revisa los turnos y fragmentos recuperados, evalúa la precisión de las respuestas y consulta las métricas del proyecto. |
+| **Asesor o jurado** | Revisa la arquitectura, el flujo funcional, la evidencia del ICA y los resultados obtenidos durante la evaluación del prototipo. |
+| **Servicios externos** | Vapi coordina la conversación de voz; ElevenLabs proporciona las voces; Gemini genera embeddings y participa en la evaluación RAGAs; Cloudflare R2 almacena archivos. |
 
-Una historia se consideró terminada cuando:
+# **3. Roles de Scrum**
 
-- la funcionalidad estaba implementada e integrada en la aplicación;
-- los datos de entrada se validaban y se respetaba la autorización del usuario;
-- la interfaz y los mensajes estaban en español;
-- se verificaba el flujo principal y los casos de error relevantes;
-- la lógica pura incorporaba pruebas automatizadas cuando correspondía;
-- la documentación técnica o de configuración quedaba actualizada;
-- no se exponían claves ni credenciales en el repositorio.
+En la Tabla 3 se presentan los roles Scrum adoptados para un proyecto desarrollado por una sola
+persona. La misma persona asumió los roles, pero mantuvo diferenciadas sus responsabilidades.
 
-## 8. Riesgos e impedimentos gestionados
+*Tabla 3. Roles Scrum*
 
-| Riesgo | Impacto | Tratamiento |
-|---|---|---|
-| Dependencia de Vapi, ElevenLabs, Gemini y almacenamiento externo | Alto | Documentar variables de entorno, configuración, límites y comportamiento ante errores. |
-| Respuestas del agente no sustentadas en el PDF | Alto | Hacer obligatoria la recuperación, aplicar umbral de relevancia y registrar fragmentos. |
-| Pérdida de sesiones o turnos | Alto | Persistir sesiones, turnos y recuperaciones en la base de datos. |
-| Falta de datos reales para calcular métricas | Alto | Separar la implementación de métricas de la recolección; reportar `n` y no inventar resultados. |
-| Trabajo individual y alcance amplio | Medio | Priorizar el MVP, usar sprints cortos y dejar suscripciones como andamiaje fuera del alcance. |
-| Configuración del assistant fuera del repositorio | Medio | Versionar el prompt y la configuración de referencia en `docs/agente/`. |
+| Responsable | Roles | Responsabilidades principales |
+| ----- | ----- | ----- |
+| **[Nombre del estudiante]** | Product Owner / Scrum Master / Developer | Definir y priorizar el Product Backlog, organizar los sprints, gestionar impedimentos, analizar requisitos, diseñar, programar, probar y documentar el producto. |
 
-## 9. Resultado del proyecto
+*Nota: completar el nombre del estudiante y del docente antes de presentar el documento.*
 
-Al finalizar el periodo se obtuvo un incremento funcional compuesto por:
+# **4. Identificación de procesos**
 
-1. autenticación y biblioteca de investigaciones;
-2. carga, segmentación y vectorización de documentos PDF;
-3. recuperación de fragmentos con página y umbral de relevancia;
-4. conversación de voz en español con el agente en rol de docente evaluador;
-5. persistencia de sesiones, turnos, latencias y recuperaciones;
-6. evaluación de precisión, métricas ICA, PR, LP y RAGAs, y exportación de resultados;
-7. documentación de arquitectura, decisiones técnicas, limitaciones y evidencias.
+* Gestionar la autenticación y el acceso seguro de los usuarios.
+* Gestionar la biblioteca de investigaciones cargadas por el estudiante.
+* Cargar, validar y almacenar documentos PDF en la plataforma.
+* Extraer el texto del documento respetando la información de sus páginas.
+* Segmentar el contenido y generar embeddings para la búsqueda semántica.
+* Recuperar fragmentos relevantes de la investigación mediante la base vectorial.
+* Gestionar la sesión de conversación por voz entre el estudiante y el agente.
+* Formular preguntas de sustentación en español y en rol de docente evaluador.
+* Registrar transcripciones, turnos, recuperaciones y latencias de cada sesión.
+* Evaluar la precisión de las respuestas y calcular las métricas del sistema.
+* Consultar y exportar los resultados de evaluación para la investigación.
+* Documentar la arquitectura, las decisiones técnicas y las limitaciones del prototipo.
 
-El alcance se limitó a un prototipo de investigación: requiere internet, micrófono, parlantes y
-servicios externos configurados. Las encuestas de la investigación se aplican fuera de la
-aplicación; el sistema solo registra el código y grupo del participante para facilitar el cruce
-posterior.
+# **5. Identificación de requerimientos**
 
-## 10. Retrospectiva final
+Se describen a continuación los requerimientos funcionales y no funcionales identificados para el
+sistema Bookified.
 
-**Qué funcionó:** priorizar primero el flujo estudiante–PDF–voz–RAG permitió validar el valor del
-producto antes de construir el módulo de métricas. La documentación versionada facilitó justificar
-las decisiones ante un jurado.
+## **Requerimientos funcionales**
 
-**Qué se mejoraría:** realizar antes pruebas con documentos académicos reales, calibrar el umbral
-del retriever con un conjunto de consultas representativo y automatizar la sincronización de la
-configuración del assistant cuando el proveedor lo permita.
+Según los procesos identificados, se establecieron las siguientes funcionalidades:
 
-**Acción posterior:** ejecutar una prueba piloto, recolectar sesiones reales, completar las
-evaluaciones humanas y reportar los resultados estadísticos sin reemplazarlos por valores
-estimados.
+* El sistema debe permitir el registro e inicio de sesión del estudiante.
+* El sistema debe restringir las investigaciones y sesiones al usuario autorizado.
+* El estudiante debe poder cargar un documento de investigación en formato PDF.
+* El sistema debe extraer el texto del PDF y conservar el número de página de origen.
+* El sistema debe dividir el texto en segmentos de 500 palabras con un solape de 50 palabras.
+* El sistema debe generar embeddings y almacenar los segmentos en PostgreSQL con pgvector.
+* El retriever debe buscar fragmentos por similitud coseno y aplicar un valor top-K configurable.
+* El retriever debe descartar fragmentos que no superen el umbral de relevancia establecido.
+* El estudiante debe poder iniciar y finalizar una conversación de voz sobre su investigación.
+* La conversación debe integrar STT, LLM y TTS mediante Vapi y ElevenLabs.
+* El agente debe realizar preguntas en español, con el rol de docente evaluador.
+* El agente debe consultar el documento antes de formular preguntas de contenido y no debe inventar información.
+* El estudiante debe poder seleccionar una voz disponible antes de iniciar la sesión.
+* El sistema debe mostrar la transcripción de la conversación en tiempo real.
+* El sistema debe registrar cada sesión, turno, fragmento recuperado y distancia de similitud.
+* El sistema debe calcular la latencia promedio del sistema y la latencia de respuesta verbal del estudiante.
+* El investigador debe poder marcar una respuesta como correcta o incorrecta y agregar observaciones.
+* El sistema debe calcular ICA, PR, LP y métricas RAGAs a partir de los datos persistidos.
+* El sistema debe mostrar las métricas en la ruta `/metrics` y permitir su exportación en CSV.
+* El sistema debe permitir asociar al usuario un código de participante y un grupo de estudio.
+
+## **Requerimientos no funcionales**
+
+*Tabla 4. Requerimientos no funcionales*
+
+| Requerimiento | Descripción |
+| ----- | ----- |
+| **Seguridad y privacidad** | El sistema debe validar la sesión del usuario y comprobar la propiedad de cada investigación antes de leer o modificar sus datos. Las credenciales y claves de servicios deben mantenerse fuera del repositorio. |
+| **Rendimiento** | La recuperación de contexto debe responder con una latencia medible y la conversación debe conservar una interacción suficientemente fluida para el uso por voz. |
+| **Usabilidad** | La interfaz debe ser clara, responsive y comprensible para estudiantes sin conocimientos técnicos avanzados. Los mensajes al usuario deben estar en español. |
+| **Mantenibilidad** | El código debe organizarse en módulos reutilizables de Next.js, TypeScript, Server Actions, Drizzle y componentes de interfaz. |
+| **Trazabilidad** | Cada respuesta evaluable debe poder relacionarse con su pregunta, contexto recuperado, documento y sesión correspondiente. |
+| **Disponibilidad** | La aplicación debe informar las limitaciones de conectividad, micrófono, parlantes y disponibilidad de los servicios externos. |
+| **Escalabilidad** | La solución debe permitir incorporar más documentos, sesiones y participantes sin cambiar el flujo principal del sistema. |
+
+# **6. Historias de usuario**
+
+Las historias de usuario se presentan ordenadas por el incremento funcional desarrollado entre abril
+y agosto de 2026. El estado indicado corresponde al cierre de la versión candidata del proyecto.
+
+*Tabla 5. Historias de usuario*
+
+| HU | Nombre | Descripción |
+| ----- | :---: | ----- |
+| **HU1** | Registro e inicio de sesión | Como estudiante, quiero registrarme e iniciar sesión para acceder de forma segura a mis investigaciones y sesiones. |
+| **HU2** | Biblioteca de investigaciones | Como estudiante, quiero visualizar mis investigaciones cargadas para seleccionar aquella que usaré en la práctica. |
+| **HU3** | Carga de investigación en PDF | Como estudiante, quiero cargar un avance de investigación en PDF para convertirlo en la fuente de la sustentación. |
+| **HU4** | Extracción y segmentación por páginas | Como sistema, quiero extraer y segmentar el texto del PDF conservando su página de origen para facilitar la trazabilidad. |
+| **HU5** | Embeddings del documento | Como sistema, quiero generar embeddings de cada segmento para realizar búsquedas semánticas. |
+| **HU6** | Base vectorial | Como sistema, quiero guardar los segmentos y embeddings en PostgreSQL con pgvector para consultarlos durante la conversación. |
+| **HU7** | Recuperación de contexto RAG | Como estudiante, quiero que el sistema recupere fragmentos relevantes de mi investigación antes de generar una pregunta. |
+| **HU8** | Umbral y top-K del retriever | Como investigador, quiero configurar top-K y un umbral de distancia para evitar contexto irrelevante. |
+| **HU9** | Conversación por voz | Como estudiante, quiero conversar en tiempo real con el agente para practicar una sustentación oral. |
+| **HU10** | Agente docente evaluador | Como estudiante, quiero que el agente formule preguntas sobre problema, metodología, resultados y conclusiones con rigor académico. |
+| **HU11** | Anclaje obligatorio y español | Como estudiante, quiero recibir preguntas en español basadas en mi documento, sin que el agente invente información. |
+| **HU12** | Selección de voz y transcripción | Como estudiante, quiero seleccionar una voz y visualizar la transcripción de la sesión mientras converso. |
+| **HU13** | Persistencia de sesiones y turnos | Como investigador, quiero guardar cada intervención de la sesión para poder analizar posteriormente la conversación. |
+| **HU14** | Registro de latencias y recuperaciones | Como investigador, quiero registrar la latencia del sistema, la respuesta del estudiante y los fragmentos recuperados. |
+| **HU15** | Evaluación de precisión | Como investigador, quiero marcar cada respuesta como correcta o incorrecta y registrar una observación. |
+| **HU16** | Identificación de participantes | Como investigador, quiero asociar un código y un grupo de estudio a cada participante para cruzar los datos con encuestas externas. |
+| **HU17** | Cálculo de ICA y métricas | Como investigador, quiero calcular ICA, PR, LP y RAGAs con los datos de las sesiones. |
+| **HU18** | Panel y exportación de resultados | Como investigador, quiero consultar `/metrics` y exportar los resultados en CSV para utilizarlos en el informe de investigación. |
+| **HU19** | Documentación de arquitectura | Como asesor o jurado, quiero consultar la arquitectura y sus archivos de evidencia para verificar la integración de los componentes. |
+| **HU20** | Manejo de errores y limitaciones | Como usuario, quiero recibir mensajes claros cuando falte conexión, micrófono, parlantes, configuración o contexto relevante. |
+
+# **7. Product backlog priorizado**
+
+*Tabla 6. Product backlog priorizado*
+
+| Historia de usuario | Descripción | Prioridad |
+| :---: | ----- | :---: |
+| **HU1** | Registro e inicio de sesión | 1 |
+| **HU2** | Biblioteca de investigaciones | 1 |
+| **HU3** | Carga de investigación en PDF | 1 |
+| **HU4** | Extracción y segmentación por páginas | 1 |
+| **HU5** | Embeddings del documento | 1 |
+| **HU6** | Base vectorial | 1 |
+| **HU7** | Recuperación de contexto RAG | 1 |
+| **HU8** | Umbral y top-K del retriever | 1 |
+| **HU9** | Conversación por voz | 1 |
+| **HU10** | Agente docente evaluador | 1 |
+| **HU11** | Anclaje obligatorio y español | 1 |
+| **HU12** | Selección de voz y transcripción | 2 |
+| **HU13** | Persistencia de sesiones y turnos | 1 |
+| **HU14** | Registro de latencias y recuperaciones | 1 |
+| **HU15** | Evaluación de precisión | 2 |
+| **HU16** | Identificación de participantes | 2 |
+| **HU17** | Cálculo de ICA y métricas | 1 |
+| **HU18** | Panel y exportación de resultados | 1 |
+| **HU19** | Documentación de arquitectura | 2 |
+| **HU20** | Manejo de errores y limitaciones | 2 |
+
+**Prioridad 1:** funcionalidades indispensables para el flujo principal y la evidencia de la
+investigación.  
+**Prioridad 2:** funcionalidades importantes para completar la evaluación, la trazabilidad y la
+calidad del producto.
+
+# **8. Estimación del product backlog**
+
+En las tablas 7 y 8 se presenta la estimación del Product Backlog mediante puntos de historia y
+tiempo ideal de desarrollo. La estimación considera una persona desarrolladora y no incluye tiempos
+de espera de servicios externos.
+
+*Tabla 7. Asignación de puntos de historia*
+
+| Tamaño | Puntos | Tiempo [días] |
+| :---: | :---: | :---: |
+| **XtraSmall (XS)** | 1 | 0.5 |
+| **Small (S)** | 2 | 1 |
+| **Medium (M)** | 3 | 1.5 |
+| **Large (L)** | 5 | 2 |
+| **XtraLarge (XL)** | 8 | 3 |
+
+*Tabla 8. Estimación del Product Backlog por sprint*
+
+| Sprint y fechas | HU | Descripción | Tamaño | Puntos | Tiempo [días] |
+| ----- | ----- | ----- | :---: | :---: | :---: |
+| **Sprint 1** 01–12 abril (Base y acceso) | HU1 | Registro e inicio de sesión | M | 3 | 1.5 |
+|  | HU2 | Biblioteca de investigaciones | M | 3 | 1.5 |
+|  | HU16 | Identificación de participantes | M | 3 | 1.5 |
+| **Subtotal Sprint 1** |  |  |  | **9** | **4.5** |
+| **Sprint 2** 13–26 abril (Carga y procesamiento) | HU3 | Carga de investigación en PDF | L | 5 | 2 |
+|  | HU4 | Extracción y segmentación por páginas | L | 5 | 2 |
+| **Subtotal Sprint 2** |  |  |  | **10** | **4** |
+| **Sprint 3** 27 abril–10 mayo (Embeddings y base vectorial) | HU5 | Embeddings del documento | XL | 8 | 3 |
+|  | HU6 | Base vectorial | XL | 8 | 3 |
+| **Subtotal Sprint 3** |  |  |  | **16** | **6** |
+| **Sprint 4** 11–24 mayo (Retriever) | HU7 | Recuperación de contexto RAG | XL | 8 | 3 |
+|  | HU8 | Umbral y top-K del retriever | XL | 8 | 3 |
+| **Subtotal Sprint 4** |  |  |  | **16** | **6** |
+| **Sprint 5** 25 mayo–07 junio (Conversación de voz) | HU9 | Conversación por voz | XL | 8 | 3 |
+|  | HU12 | Selección de voz y transcripción | M | 3 | 1.5 |
+| **Subtotal Sprint 5** |  |  |  | **11** | **4.5** |
+| **Sprint 6** 08–21 junio (Agente evaluador) | HU10 | Agente docente evaluador | L | 5 | 2 |
+|  | HU11 | Anclaje obligatorio y español | L | 5 | 2 |
+| **Subtotal Sprint 6** |  |  |  | **10** | **4** |
+| **Sprint 7** 22 junio–05 julio (Persistencia e instrumentación) | HU13 | Persistencia de sesiones y turnos | XL | 8 | 3 |
+|  | HU14 | Registro de latencias y recuperaciones | L | 5 | 2 |
+| **Subtotal Sprint 7** |  |  |  | **13** | **5** |
+| **Sprint 8** 06–19 julio (Evaluación) | HU15 | Evaluación de precisión | L | 5 | 2 |
+|  | HU17 | Cálculo de ICA y métricas | XL | 8 | 3 |
+| **Subtotal Sprint 8** |  |  |  | **13** | **5** |
+| **Sprint 9** 20 julio–02 agosto (Reporte y documentación) | HU18 | Panel y exportación de resultados | L | 5 | 2 |
+|  | HU19 | Documentación de arquitectura | M | 3 | 1.5 |
+| **Subtotal Sprint 9** |  |  |  | **8** | **3.5** |
+| **Sprint 10** 03–16 agosto (Calidad y errores) | HU20 | Manejo de errores y limitaciones | M | 3 | 1.5 |
+|  |  | Pruebas integrales y correcciones | M | 3 | 1.5 |
+| **Subtotal Sprint 10** |  |  |  | **6** | **3** |
+| **Sprint 11** 17–30 agosto (Cierre y entrega) |  | Validación del incremento, revisión final y preparación de evidencias | M | 3 | 1.5 |
+| **Subtotal Sprint 11** |  |  |  | **3** | **1.5** |
+| **TOTAL GENERAL** |  |  |  | **115** | **47** |
+
+**Puntos de historia del Product Backlog:** 109 puntos correspondientes a las historias de usuario
+y 6 puntos correspondientes a pruebas integrales, correcciones y validación final.  
+**Tiempo ideal estimado:** 47 días de trabajo individual, distribuido entre el 1 de abril y el
+30 de agosto de 2026.
+
+Durante el desarrollo se priorizó el incremento mínimo viable: autenticación, carga del PDF,
+procesamiento RAG y conversación por voz. Posteriormente se incorporaron la persistencia, la
+instrumentación, las métricas y la documentación necesaria para sustentar el resultado técnico.
+
+> **Nota metodológica:** las métricas ICA, PR, LP y RAGAs deben reportarse con datos obtenidos de
+> sesiones reales o de un conjunto de prueba documentado. Este documento describe la planificación
+> y el backlog; no reemplaza los resultados experimentales.

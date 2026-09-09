@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Upload, ImageIcon } from 'lucide-react';
@@ -9,15 +9,17 @@ import { BookUploadFormValues } from '@/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, DEFAULT_VOICE } from '@/lib/constants';
+import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES } from '@/lib/constants';
 import FileUploader from './FileUploader';
-import VoiceSelector from './VoiceSelector';
+// VoiceSelector is intentionally not imported while only the default Vapi voice is available.
+// Restore the import and the commented form field below when multiple voices are enabled.
+// import VoiceSelector from './VoiceSelector';
 import LoadingOverlay from './LoadingOverlay';
 import { useSession } from "@/lib/auth-client";
 import { toast } from 'sonner';
 import {checkBookExists, createBook, saveBookSegments} from "@/lib/actions/book.actions";
 import {useRouter} from "next/navigation";
-import {parsePDFFile} from "@/lib/utils";
+import {generateSlug, parsePDFFile} from "@/lib/utils";
 
 type UploadScope = 'pdf' | 'cover';
 
@@ -55,14 +57,9 @@ async function uploadToR2(file: Blob & { name?: string }, scope: UploadScope, fi
 
 const UploadForm = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isMounted, setIsMounted] = useState(false);
     const { data: session } = useSession();
     const userId = session?.user?.id;
     const router = useRouter()
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
 
     const form = useForm<BookUploadFormValues>({
         resolver: zodResolver(UploadSchema),
@@ -94,7 +91,8 @@ const UploadForm = () => {
                 return;
             }
 
-            const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
+            // The persisted title has no character limit; storage keys stay short and filesystem-safe.
+            const fileTitle = generateSlug(data.title);
             const pdfFile = data.pdfFile;
 
             const parsedPDF = await parsePDFFile(pdfFile);
@@ -131,9 +129,6 @@ const UploadForm = () => {
 
             if(!book.success) {
                 toast.error(book.error as string || "Error al crear la investigación");
-                if (book.isBillingError) {
-                    router.push("/subscriptions");
-                }
                 return;
             }
 
@@ -161,8 +156,6 @@ const UploadForm = () => {
             setIsSubmitting(false);
         }
     };
-
-    if (!isMounted) return null;
 
     return (
         <>
@@ -235,26 +228,14 @@ const UploadForm = () => {
                             )}
                         />
 
-                        {/* 5. Voice Selector */}
-                        <FormField
-                            control={form.control}
-                            name="persona"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel className="form-label">Elige la voz del asistente</FormLabel>
-                                    <FormControl>
-                                        <VoiceSelector
-                                            value={field.value}
-                                            onChange={field.onChange}
-                                            disabled={isSubmitting}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                        {/*
+                          Voice selection is intentionally hidden. Investfied currently uses
+                          one default voice configured in Vapi. When multiple voices return,
+                          restore the VoiceSelector import and its FormField here, then make
+                          `persona` required again in UploadSchema.
+                        */}
 
-                        {/* 6. Submit Button */}
+                        {/* 5. Submit Button */}
                         <Button type="submit" className="form-btn" disabled={isSubmitting}>
                             Iniciar síntesis
                         </Button>

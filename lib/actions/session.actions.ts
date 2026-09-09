@@ -1,14 +1,13 @@
 'use server';
 
-import { and, count, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
 import { books, sessionTurns, voiceSessions } from '@/database/schema';
 import { requireUser } from '@/lib/session';
-import { PLAN_LIMITS, getCurrentBillingPeriodStart } from '@/lib/subscription-constants';
-import { getUserPlan } from '@/lib/subscription.server';
+import { MAX_SESSION_DURATION_MINUTES } from '@/lib/constants';
+import { getCurrentBillingPeriodStart } from '@/lib/subscription-constants';
 import type { EndSessionResult, SaveTurnInput, SaveTurnResult, StartSessionResult } from '@/types';
 
 export const startVoiceSession = async (bookId: string): Promise<StartSessionResult> => {
@@ -26,28 +25,7 @@ export const startVoiceSession = async (bookId: string): Promise<StartSessionRes
             return { success: false, error: 'Book not found or unauthorized' };
         }
 
-        const plan = await getUserPlan();
-        const limits = PLAN_LIMITS[plan];
         const billingPeriodStart = getCurrentBillingPeriodStart();
-
-        const [{ value: sessionCount }] = await db
-            .select({ value: count() })
-            .from(voiceSessions)
-            .where(
-                and(
-                    eq(voiceSessions.userId, userId),
-                    eq(voiceSessions.billingPeriodStart, billingPeriodStart),
-                ),
-            );
-
-        if (sessionCount >= limits.maxSessionsPerMonth) {
-            revalidatePath('/');
-            return {
-                success: false,
-                error: `You have reached the monthly session limit for your ${plan} plan (${limits.maxSessionsPerMonth}). Please upgrade for more sessions.`,
-                isBillingError: true,
-            };
-        }
 
         const [session] = await db
             .insert(voiceSessions)
@@ -64,7 +42,7 @@ export const startVoiceSession = async (bookId: string): Promise<StartSessionRes
         return {
             success: true,
             sessionId: session.id,
-            maxDurationMinutes: limits.maxDurationPerSession,
+            maxDurationMinutes: MAX_SESSION_DURATION_MINUTES,
         };
     } catch (e) {
         console.error('Error starting voice session', e);
@@ -77,10 +55,11 @@ export const endVoiceSession = async (
     durationSeconds: number,
 ): Promise<EndSessionResult> => {
     try {
+        const user = await requireUser();
         const result = await db
             .update(voiceSessions)
             .set({ endedAt: new Date(), durationSeconds, updatedAt: new Date() })
-            .where(eq(voiceSessions.id, sessionId))
+            .where(and(eq(voiceSessions.id, sessionId), eq(voiceSessions.userId, user.id)))
             .returning({ id: voiceSessions.id });
 
         if (result.length === 0) {
@@ -143,5 +122,85 @@ export const saveSessionTurn = async (input: SaveTurnInput): Promise<SaveTurnRes
     } catch (e) {
         console.error('Error saving session turn', e);
         return { success: false, error: 'Failed to save session turn.' };
+    }
+};
+
+export const getConversationHistory = async () => {
+    try {
+        const user = await requireUser();
+
+        const rows = await db
+            .select({
+                id: voiceSessions.id,
+                bookId: voiceSessions.bookId,
+                bookTitle: books.title,
+                bookAuthor: books.author,
+                startedAt: voiceSessions.startedAt,
+                endedAt: voiceSessions.endedAt,
+                durationSeconds: voiceSessions.durationSeconds,
+                turnCount: count(sessionTurns.id),
+            })
+            .from(voiceSessions)
+            .innerJoin(books, eq(voiceSessions.bookId, books.id))
+            // An empty/failed call is not a past conversation.
+            .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id))
+            .where(eq(voiceSessions.userId, user.id))
+            .groupBy(
+                voiceSessions.id,
+                voiceSessions.bookId,
+                voiceSessions.startedAt,
+                voiceSessions.endedAt,
+                voiceSessions.durationSeconds,
+                books.title,
+                books.author,
+            )
+            .orderBy(desc(voiceSessions.startedAt));
+
+        return { success: true, data: rows };
+    } catch (e) {
+        console.error('Error fetching conversation history', e);
+        return { success: false, error: 'No se pudo cargar el historial.' };
+    }
+};
+
+export const getConversationById = async (sessionId: string) => {
+    try {
+        const user = await requireUser();
+
+        const [conversation] = await db
+            .select({
+                id: voiceSessions.id,
+                bookId: voiceSessions.bookId,
+                bookTitle: books.title,
+                bookAuthor: books.author,
+                startedAt: voiceSessions.startedAt,
+                endedAt: voiceSessions.endedAt,
+                durationSeconds: voiceSessions.durationSeconds,
+            })
+            .from(voiceSessions)
+            .innerJoin(books, eq(voiceSessions.bookId, books.id))
+            .where(and(eq(voiceSessions.id, sessionId), eq(voiceSessions.userId, user.id)))
+            .limit(1);
+
+        if (!conversation) {
+            return { success: false, error: 'Conversación no encontrada.' };
+        }
+
+        const turns = await db
+            .select({
+                id: sessionTurns.id,
+                role: sessionTurns.role,
+                content: sessionTurns.content,
+                turnIndex: sessionTurns.turnIndex,
+                startedAt: sessionTurns.startedAt,
+            })
+            .from(sessionTurns)
+            .where(eq(sessionTurns.sessionId, conversation.id))
+            .orderBy(asc(sessionTurns.turnIndex));
+
+        return { success: true, data: { conversation, turns } };
+    } catch (e) {
+        console.error('Error fetching conversation', e);
+        return { success: false, error: 'No se pudo cargar la conversación.' };
     }
 };

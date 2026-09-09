@@ -6,9 +6,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Vapi from '@vapi-ai/web';
 import { useSession } from '@/lib/auth-client';
 
-import { useSubscription } from '@/hooks/useSubscription';
-import { ASSISTANT_ID, DEFAULT_VOICE, VAPI_FALLBACK_VOICE, VOICE_SETTINGS } from '@/lib/constants';
-import { getVoice } from '@/lib/utils';
+import {
+    ASSISTANT_ID,
+    MAX_SESSION_DURATION_MINUTES,
+    VAPI_FALLBACK_VOICE,
+} from '@/lib/constants';
 import { IBook, Messages } from '@/types';
 import { startVoiceSession, endVoiceSession, saveSessionTurn } from '@/lib/actions/session.actions';
 
@@ -25,7 +27,6 @@ export function useLatestRef<T>(value: T) {
 const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
 const TIMER_INTERVAL_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
-const TIME_WARNING_THRESHOLD = 60; // Show warning when this many seconds remain
 
 let vapi: InstanceType<typeof Vapi>;
 function getVapi() {
@@ -43,7 +44,6 @@ export type CallStatus = 'idle' | 'connecting' | 'starting' | 'listening' | 'thi
 export function useVapi(book: IBook) {
     const { data: session } = useSession();
     const userId = session?.user?.id;
-    const { limits } = useSubscription();
 
     const [status, setStatus] = useState<CallStatus>('idle');
     const [messages, setMessages] = useState<Messages[]>([]);
@@ -51,7 +51,6 @@ export function useVapi(book: IBook) {
     const [currentUserMessage, setCurrentUserMessage] = useState('');
     const [duration, setDuration] = useState(0);
     const [limitError, setLimitError] = useState<string | null>(null);
-    const [isBillingError, setIsBillingError] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
@@ -117,10 +116,9 @@ export function useVapi(book: IBook) {
     );
 
     // Keep refs in sync with latest values for use in callbacks
-    const maxDurationSeconds = limits?.maxDurationPerSession ? limits.maxDurationPerSession * 60 : (15 * 60);
+    const maxDurationSeconds = MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE;
     const maxDurationRef = useLatestRef(maxDurationSeconds);
     const durationRef = useLatestRef(duration);
-    const voice = book.persona || DEFAULT_VOICE;
 
     // Set up Vapi event listeners
     useEffect(() => {
@@ -144,9 +142,9 @@ export function useVapi(book: IBook) {
                         if (newDuration >= maxDurationRef.current) {
                             getVapi().stop();
                             setLimitError(
-                                `Session time limit (${Math.floor(
+                                `La sesión alcanzó el límite de ${Math.floor(
                                     maxDurationRef.current / SECONDS_PER_MINUTE,
-                                )} minutes) reached. Upgrade your plan for longer sessions.`,
+                                )} minutos.`,
                             );
                         }
                     }
@@ -315,6 +313,9 @@ export function useVapi(book: IBook) {
             // End active session on unmount
             if (sessionIdRef.current) {
                 getVapi().stop();
+                // We intentionally need the latest duration at unmount, not the
+                // value captured when the listeners were registered.
+                // eslint-disable-next-line react-hooks/exhaustive-deps
                 endVoiceSession(sessionIdRef.current, durationRef.current).catch((err) =>
                     console.error('Failed to end voice session on unmount:', err),
                 );
@@ -326,7 +327,7 @@ export function useVapi(book: IBook) {
             });
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [persistTurn, resetTurnTracking]);
+    }, [durationRef, maxDurationRef, persistTurn, resetTurnTracking]);
 
     const start = useCallback(async () => {
         if (!userId) {
@@ -335,49 +336,32 @@ export function useVapi(book: IBook) {
         }
 
         setLimitError(null);
-        setIsBillingError(false);
         setStatus('connecting');
 
         try {
-            // Check session limits and create session record
+            // Create the persisted session before connecting to Vapi.
             const result = await startVoiceSession(book.id);
 
             if (!result.success) {
-                setLimitError(result.error || 'Session limit reached. Please upgrade your plan.');
-                setIsBillingError(!!result.isBillingError);
+                setLimitError(result.error || 'No se pudo iniciar la sesión. Inténtalo nuevamente.');
                 setStatus('idle');
                 return;
             }
 
             sessionIdRef.current = result.sessionId || null;
-            // Note: Server-returned maxDurationMinutes is informational only
-            // The actual limit is enforced by useLatestRef(limits.maxSessionMinutes * 60)
-
             // Opening of the thesis defense. Sent from here — not from the Vapi dashboard —
             // because it interpolates the actual thesis title. See docs/agente/.
             const firstMessage = `Buenas tardes. Formo parte del jurado que evaluará su avance de investigación, titulado "${book.title}". Le invito a exponer brevemente su trabajo: de qué trata, qué problema aborda y en qué punto se encuentra. Cuando termine, iniciaré las preguntas.`;
 
-            const voiceOverride = process.env.NEXT_PUBLIC_ELEVENLABS_ENABLED === 'true'
-                ? {
-                    voice: {
-                        provider: '11labs' as const,
-                        voiceId: getVoice(voice).id,
-                        model: 'eleven_turbo_v2_5' as const,
-                        stability: VOICE_SETTINGS.stability,
-                        similarityBoost: VOICE_SETTINGS.similarityBoost,
-                        style: VOICE_SETTINGS.style,
-                        useSpeakerBoost: VOICE_SETTINGS.useSpeakerBoost,
-                    },
-                }
-                // Vapi's own TTS. Sent explicitly rather than falling back to the
-                // dashboard voice, because the dashboard assistant is still set to
-                // ElevenLabs and would drop the call without that credential.
-                : {
-                    voice: {
-                        provider: 'vapi' as const,
-                        voiceId: VAPI_FALLBACK_VOICE.voiceId,
-                    },
-                };
+            // Investfied currently exposes one voice only. The old ElevenLabs
+            // choices remain documented in constants.ts and VoiceSelector.tsx for
+            // the future multi-voice phase, but are deliberately not read here.
+            const voiceOverride = {
+                voice: {
+                    provider: 'vapi' as const,
+                    voiceId: VAPI_FALLBACK_VOICE.voiceId,
+                },
+            };
 
             await getVapi().start(ASSISTANT_ID, {
                 firstMessage,
@@ -396,7 +380,7 @@ export function useVapi(book: IBook) {
             setStatus('idle');
             setLimitError('Failed to start voice session. Please try again.');
         }
-    }, [book.id, book.title, book.author, voice, userId]);
+    }, [book.id, book.title, book.author, userId]);
 
     const stop = useCallback(() => {
         isStoppingRef.current = true;
@@ -405,7 +389,6 @@ export function useVapi(book: IBook) {
 
     const clearError = useCallback(() => {
         setLimitError(null);
-        setIsBillingError(false);
     }, []);
 
     const isActive =
@@ -413,12 +396,6 @@ export function useVapi(book: IBook) {
         status === 'listening' ||
         status === 'thinking' ||
         status === 'speaking';
-
-    // Calculate remaining time
-    // const maxDurationSeconds = limits.maxSessionMinutes * SECONDS_PER_MINUTE;
-    // const remainingSeconds = Math.max(0, maxDurationSeconds - duration);
-    // const showTimeWarning =
-    //     isActive && remainingSeconds <= TIME_WARNING_THRESHOLD && remainingSeconds > 0;
 
     return {
         status,
@@ -430,12 +407,8 @@ export function useVapi(book: IBook) {
         start,
         stop,
         limitError,
-        isBillingError,
         maxDurationSeconds,
         clearError,
-        // maxDurationSeconds,
-        // remainingSeconds,
-        // showTimeWarning,
     };
 }
 

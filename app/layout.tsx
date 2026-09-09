@@ -19,7 +19,7 @@ const monaSans = Mona_Sans({
 })
 
 export const metadata: Metadata = {
-  title: "Tesified",
+  title: "Investfied",
   description: "Transforma tus investigaciones en conversaciones interactivas con IA. Sube PDFs y chatea con tus investigaciones usando tu voz.",
 };
 

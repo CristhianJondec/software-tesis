@@ -5,7 +5,6 @@ import type { InferSelectModel } from 'drizzle-orm';
 import z from 'zod';
 import { UploadSchema } from '@/lib/zod';
 import { books, bookSegments, sessionTurns, turnRetrievals, voiceSessions } from '@/database/schema';
-import type { PlanType } from '@/lib/subscription-constants';
 
 // ============================================
 // DATABASE MODELS (inferred from Drizzle schema)
@@ -91,21 +90,11 @@ export interface FileUploadFieldProps<T extends FieldValues> {
     hint: string;
 }
 
-export interface SessionCheckResult {
-    allowed: boolean;
-    currentCount: number;
-    limit: number;
-    plan: PlanType;
-    maxDurationMinutes: number;
-    error?: string;
-}
-
 export interface StartSessionResult {
     success: boolean;
     sessionId?: string;
     maxDurationMinutes?: number;
     error?: string;
-    isBillingError?: boolean;
 }
 
 export interface EndSessionResult {

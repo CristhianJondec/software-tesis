@@ -10,13 +10,27 @@ export function cn(...inputs: ClassValue[]) {
 
 // Auto generate slug
 export function generateSlug(text: string): string {
-  return text
+  const normalized = text
       .replace(/\.[^/.]+$/, '') // Remove file extension (.pdf, .txt, etc.)
       .toLowerCase() // Convert to lowercase
       .trim() // Remove whitespace from both ends
       .replace(/[^\w\s-]/g, '') // Remove special characters (keep letters, numbers, spaces, hyphens)
       .replace(/[\s_]+/g, '-') // Replace spaces and underscores with hyphens
       .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+
+  // Titles have no user-facing character limit. Only the URL identifier is
+  // bounded so very long titles do not create invalid paths or index entries.
+  let hash = 2166136261;
+  for (const character of text) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  const suffix = (hash >>> 0).toString(36);
+
+  if (!normalized) return `investigacion-${suffix}`;
+  if (normalized.length <= 80) return normalized;
+
+  return `${normalized.slice(0, 71).replace(/-+$/g, '')}-${suffix}`;
 }
 
 // Get voice data by persona key or voice ID

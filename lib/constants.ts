@@ -8,9 +8,15 @@ export const ACCEPTED_PDF_TYPES = ['application/pdf'];
 export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
+// Operational cap for a single live call. It is not tied to a payment plan.
+export const MAX_SESSION_DURATION_MINUTES = 60;
+
 // Pre-configured VAPI assistant ID (hardcoded for this app)
 export const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 
+// Future multi-voice configuration. The selector is intentionally hidden while
+// Investfied uses the single default voice provided by Vapi. Keep these entries
+// documented so VoiceSelector can be restored without rebuilding the feature.
 // 11Labs Voice IDs - Optimized for conversational AI
 // Voices for the evaluating professor who leads the thesis defense.
 // Descriptions are shown to the student in VoiceSelector, so they are in Spanish.
@@ -46,8 +52,8 @@ export const VOICE_SETTINGS = {
 // Fallback TTS used while ElevenLabs is not connected in the Vapi dashboard.
 // Vapi's own voice provider ships with the platform and needs no third-party
 // credential, so the call cannot fail with assistant.voice.requestFailed.
-// Set NEXT_PUBLIC_ELEVENLABS_ENABLED=true to switch back to the ElevenLabs
-// voices in `voiceOptions` above (requires the ElevenLabs key in Vapi).
+// When multi-voice support returns, restore the ElevenLabs override in useVapi
+// and connect its credential in Vapi before exposing VoiceSelector again.
 // NOTE: no `language` field on purpose. Vapi rejected es-MX with
 // `unsupported_language`: the language list in the SDK types covers every voice
 // provider, not what this particular voice supports. Without the field the voice

@@ -1,16 +1,13 @@
 'use server';
 
-import { and, count, cosineDistance, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, cosineDistance, desc, eq, ilike, or } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
 import { books, bookSegments } from '@/database/schema';
 import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
 import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
-import { PLAN_LIMITS } from '@/lib/subscription-constants';
-import { getUserPlan } from '@/lib/subscription.server';
 import { generateSlug } from '@/lib/utils';
 import type { CreateBook, TextSegment } from '@/types';
 
@@ -77,23 +74,6 @@ export const createBook = async (data: CreateBook) => {
 
         if (existing.length > 0) {
             return { success: true, data: existing[0], alreadyExists: true };
-        }
-
-        const plan = await getUserPlan();
-        const limits = PLAN_LIMITS[plan];
-
-        const [{ value: bookCount }] = await db
-            .select({ value: count() })
-            .from(books)
-            .where(eq(books.userId, userId));
-
-        if (bookCount >= limits.maxBooks) {
-            revalidatePath('/');
-            return {
-                success: false,
-                error: `You have reached the maximum number of books allowed for your ${plan} plan (${limits.maxBooks}). Please upgrade to add more books.`,
-                isBillingError: true,
-            };
         }
 
         const [book] = await db

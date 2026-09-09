@@ -329,6 +329,19 @@
   .nav-user-name {
     @apply hidden sm:inline text-base font-medium text-black;
   }
+  .profile-trigger {
+    @apply flex items-center gap-1.5 rounded-full p-1 pr-1 sm:pr-2 text-[#212a3b] cursor-pointer transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#663820]/30;
+  }
+  .profile-avatar {
+    @apply flex size-10 items-center justify-center rounded-full bg-[#663820] text-base font-bold text-white shadow-sm;
+  }
+  .profile-menu {
+    @apply z-[100] w-64 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-white p-1.5 shadow-lg outline-none;
+    animation: profile-menu-in 120ms ease-out;
+  }
+  .profile-menu-item {
+    @apply flex cursor-pointer select-none items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-[#212a3b] outline-none transition-colors hover:bg-[#fff6e5] focus:bg-[#fff6e5];
+  }
 
   /* ===========================================
      BANNER/ALERT COMPONENTS
@@ -734,6 +747,11 @@
       transform: translateY(-2px);
     }
   }
+}
+
+@keyframes profile-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Clerk Auth Button Overrides */

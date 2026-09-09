@@ -37,7 +37,7 @@ export default function SignInPage() {
         <Card>
             <CardHeader>
                 <CardTitle className="text-2xl font-serif">Iniciar sesión</CardTitle>
-                <CardDescription>Bienvenido de vuelta a Tesified</CardDescription>
+                <CardDescription>Bienvenido de vuelta a Investfied</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
                 <Button type="button" variant="outline" onClick={handleGoogle} disabled={isPending}>

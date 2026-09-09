@@ -1,30 +1,24 @@
 'use client';
 
-import {Mic, MicOff} from "lucide-react";
+import {History, Mic, MicOff} from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import {IBook} from "@/types";
 import Image from "next/image";
+import Link from "next/link";
 import Transcript from "@/components/Transcript";
 import {toast} from "sonner";
 
-import {useRouter} from "next/navigation";
 import {useEffect} from "react";
 
 const VapiControls = ({ book }: { book: IBook }) => {
-    const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, clearError, limitError, isBillingError, maxDurationSeconds } = useVapi(book)
-    const router = useRouter();
+    const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, clearError, limitError, maxDurationSeconds } = useVapi(book)
 
     useEffect(() => {
         if (limitError) {
             toast.error(limitError);
-            if (isBillingError) {
-                router.push("/subscriptions");
-            } else {
-                router.push("/");
-            }
             clearError();
         }
-    }, [isBillingError, limitError, router, clearError]);
+    }, [limitError, clearError]);
 
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -78,22 +72,28 @@ const VapiControls = ({ book }: { book: IBook }) => {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-4 flex-1">
-                        <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold font-serif text-[#212a3b] mb-1">
-                                {book.title}
-                            </h1>
-                            <p className="text-[#3d485e] font-medium">by {book.author}</p>
+                    <div className="flex flex-col gap-4 flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                            <div className="min-w-0">
+                                <h1 className="text-2xl sm:text-3xl font-bold font-serif text-[#212a3b] mb-1 break-words">
+                                    {book.title}
+                                </h1>
+                                <p className="text-[#3d485e] font-medium break-words">Por {book.author}</p>
+                            </div>
+
+                            <Link
+                                href="/history"
+                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
+                            >
+                                <History className="size-4" />
+                                Ver historial
+                            </Link>
                         </div>
 
                         <div className="flex flex-wrap gap-3">
                             <div className="vapi-status-indicator">
                                 <span className={`vapi-status-dot ${statusDisplay.color}`} />
                                 <span className="vapi-status-text">{statusDisplay.label}</span>
-                            </div>
-
-                            <div className="vapi-status-indicator">
-                                <span className="vapi-status-text">Voz: {book.persona || "Daniel"}</span>
                             </div>
 
                             <div className="vapi-status-indicator">

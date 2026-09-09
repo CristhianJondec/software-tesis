@@ -5,7 +5,7 @@ import { getTurnsForReview, type ReviewFilter } from '@/lib/actions/metrics.acti
 import { checkMetricsAccess } from '@/lib/metrics/access';
 import { formatNumber, formatPercent } from '@/lib/metrics/format';
 
-export const metadata = { title: 'Revisión de respuestas — Tesified' };
+export const metadata = { title: 'Revisión de respuestas — Investfied' };
 
 export const dynamic = 'force-dynamic';
 

@@ -15,7 +15,7 @@ import {
 } from '@/lib/metrics/format';
 import { RAGAS_METRIC_IDS, RAGAS_METRIC_LABELS } from '@/lib/metrics/ragas';
 
-export const metadata = { title: 'Métricas — Tesified' };
+export const metadata = { title: 'Métricas — Investfied' };
 
 // Every figure is computed from the current rows; caching it would report a
 // measurement the database no longer supports.
