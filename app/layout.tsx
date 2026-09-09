@@ -21,6 +21,11 @@ const monaSans = Mona_Sans({
 export const metadata: Metadata = {
   title: "Investfied",
   description: "Transforma tus investigaciones en conversaciones interactivas con IA. Sube PDFs y chatea con tus investigaciones usando tu voz.",
+  icons: {
+    icon: "/assets/logo.png",
+    shortcut: "/assets/logo.png",
+    apple: "/assets/logo.png",
+  },
 };
 
 export default function RootLayout({
