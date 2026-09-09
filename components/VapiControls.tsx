@@ -1,6 +1,6 @@
 'use client';
 
-import {History, Mic, MicOff} from "lucide-react";
+import { AlertTriangle, History, Mic, MicOff } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import {IBook} from "@/types";
 import Image from "next/image";
@@ -61,6 +61,7 @@ const VapiControls = ({ book }: { book: IBook }) => {
                             <button
                                 onClick={isActive ? stop : start}
                                 disabled={status === 'connecting'}
+                                aria-label={isActive ? 'Finalizar conversación' : 'Iniciar conversación'}
                                 className={`vapi-mic-btn shadow-md !w-[60px] !h-[60px] z-10 ${isActive ? 'vapi-mic-btn-active' : 'vapi-mic-btn-inactive'}`}
                             >
                                 {isActive ? (
@@ -82,7 +83,7 @@ const VapiControls = ({ book }: { book: IBook }) => {
                             </div>
 
                             <Link
-                                href="/history"
+                                href={`/history?bookId=${encodeURIComponent(book.id)}`}
                                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
                             >
                                 <History className="size-4" />
@@ -104,6 +105,23 @@ const VapiControls = ({ book }: { book: IBook }) => {
                         </div>
                     </div>
                 </div>
+
+                <aside
+                    className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
+                    aria-label="Requisitos y limitaciones de la conversación por voz"
+                >
+                    <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+                    <div>
+                        <p className="font-semibold">Antes de iniciar la conversación</p>
+                        <p>
+                            Necesitas una conexión estable, permitir el acceso al micrófono y tener
+                            parlantes o audífonos activos. La conversación depende de servicios
+                            externos de voz, transcripción e inteligencia artificial; si alguno no
+                            está disponible, podrían presentarse demoras, respuestas incompletas o
+                            una interrupción de la sesión.
+                        </p>
+                    </div>
+                </aside>
 
             <div className="vapi-transcript-wrapper">
                 <div className="transcript-container min-h-[400px]">

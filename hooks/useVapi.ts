@@ -12,7 +12,12 @@ import {
     VAPI_FALLBACK_VOICE,
 } from '@/lib/constants';
 import { IBook, Messages } from '@/types';
-import { startVoiceSession, endVoiceSession, saveSessionTurn } from '@/lib/actions/session.actions';
+import {
+    startVoiceSession,
+    endVoiceSession,
+    linkVapiCall,
+    saveSessionTurn,
+} from '@/lib/actions/session.actions';
 
 export function useLatestRef<T>(value: T) {
     const ref = useRef(value);
@@ -293,11 +298,11 @@ export function useVapi(book: IBook) {
                 // Show user-friendly error message
                 const errorMessage = error.message?.toLowerCase() || '';
                 if (errorMessage.includes('timeout') || errorMessage.includes('silence')) {
-                    setLimitError('Session ended due to inactivity. Click the mic to start again.');
+                    setLimitError('La sesión terminó por inactividad. Presiona el micrófono para intentarlo otra vez.');
                 } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
-                    setLimitError('Connection lost. Please check your internet and try again.');
+                    setLimitError('Se perdió la conexión. Revisa tu internet e inténtalo otra vez.');
                 } else {
-                    setLimitError('Session ended unexpectedly. Click the mic to start again.');
+                    setLimitError('La sesión terminó inesperadamente. Presiona el micrófono para intentarlo otra vez.');
                 }
 
                 startTimeRef.current = null;
@@ -331,7 +336,7 @@ export function useVapi(book: IBook) {
 
     const start = useCallback(async () => {
         if (!userId) {
-            setLimitError('Please sign in to start a voice session.');
+            setLimitError('Inicia sesión para comenzar una conversación por voz.');
             return;
         }
 
@@ -356,14 +361,20 @@ export function useVapi(book: IBook) {
             // Investfied currently exposes one voice only. The old ElevenLabs
             // choices remain documented in constants.ts and VoiceSelector.tsx for
             // the future multi-voice phase, but are deliberately not read here.
-            const voiceOverride = {
+            const assistantOverrides = {
                 voice: {
                     provider: 'vapi' as const,
                     voiceId: VAPI_FALLBACK_VOICE.voiceId,
                 },
+                // Research sessions keep transcripts and metrics, but no audio
+                // recording is created or exposed.
+                artifactPlan: {
+                    recordingEnabled: false,
+                },
             };
 
-            await getVapi().start(ASSISTANT_ID, {
+            const localSessionId = result.sessionId ?? '';
+            const call = await getVapi().start(ASSISTANT_ID, {
                 firstMessage,
                 variableValues: {
                     title: book.title,
@@ -371,14 +382,26 @@ export function useVapi(book: IBook) {
                     bookId: book.id,
                     // Comes back on every searchBook tool call so the webhook can
                     // link the retrieved segments to this session.
-                    sessionId: result.sessionId ?? '',
+                    sessionId: localSessionId,
                 },
-...voiceOverride,
+                ...assistantOverrides,
             });
+
+            if (call?.id && localSessionId) {
+                linkVapiCall(localSessionId, call.id)
+                    .then((linkResult) => {
+                        if (!linkResult.success) {
+                            console.error('Failed to link the Vapi call:', linkResult.error);
+                        }
+                    })
+                    .catch((linkError) => console.error('Failed to link the Vapi call:', linkError));
+            }
         } catch (err) {
             console.error('Failed to start call:', err);
             setStatus('idle');
-            setLimitError('Failed to start voice session. Please try again.');
+            setLimitError(
+                'No se pudo iniciar la conversación. Revisa tu conexión, el permiso del micrófono y la disponibilidad de los servicios externos.',
+            );
         }
     }, [book.id, book.title, book.author, userId]);
 

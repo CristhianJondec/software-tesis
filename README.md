@@ -136,6 +136,9 @@ MONGODB_URI=
 
 # VAPI
 NEXT_PUBLIC_VAPI_API_KEY=
+# Private server-side key used to read call status, costs, tokens and analysis.
+# Never prefix this value with NEXT_PUBLIC_.
+VAPI_PRIVATE_API_KEY=
 VAPI_SERVER_SECRET=
 
 # Google Gemini API for embeddings

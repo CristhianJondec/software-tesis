@@ -13,9 +13,15 @@ const dateFormatter = new Intl.DateTimeFormat('es-PE', {
     timeStyle: 'short',
 });
 
-export default async function HistoryPage() {
-    const result = await getConversationHistory();
+export default async function HistoryPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ bookId?: string }>;
+}) {
+    const { bookId } = await searchParams;
+    const result = await getConversationHistory(bookId);
     const conversations = result.success ? result.data ?? [] : [];
+    const scopedBook = result.success ? result.book ?? null : null;
 
     return (
         <main className="wrapper container">
@@ -24,13 +30,27 @@ export default async function HistoryPage() {
                     <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#f3e4c7]">
                         <History className="size-6 text-[#663820]" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h1 className="text-3xl font-bold font-serif text-[#212a3b] sm:text-4xl">
-                            Historial de conversaciones
+                            {scopedBook ? 'Historial de esta investigación' : 'Historial de conversaciones'}
                         </h1>
-                        <p className="mt-2 text-[#3d485e]">
-                            Revisa tus sesiones anteriores. Estas conversaciones son de solo lectura.
+                        <p className="mt-2 text-[#3d485e] break-words">
+                            {scopedBook ? (
+                                <>
+                                    Conversaciones de <strong>{scopedBook.title}</strong>. Todas son de solo lectura.
+                                </>
+                            ) : (
+                                'Revisa tus sesiones anteriores. Estas conversaciones son de solo lectura.'
+                            )}
                         </p>
+                        {scopedBook && (
+                            <Link
+                                href="/history"
+                                className="mt-3 inline-flex text-sm font-semibold text-[#663820] underline underline-offset-4"
+                            >
+                                Ver historial general
+                            </Link>
+                        )}
                     </div>
                 </div>
 
@@ -47,16 +67,27 @@ export default async function HistoryPage() {
                             Todavía no hay conversaciones
                         </h2>
                         <p className="mt-2 text-sm text-[#3d485e]">
-                            Inicia una sesión desde alguna investigación y luego podrás revisarla aquí.
+                            {scopedBook
+                                ? 'Inicia una conversación con esta investigación y luego podrás revisarla aquí.'
+                                : 'Inicia una sesión desde alguna investigación y luego podrás revisarla aquí.'}
                         </p>
-                        <Link href="/" className="btn-primary mt-6">Ir a la biblioteca</Link>
+                        <Link
+                            href={scopedBook ? `/books/${scopedBook.slug}` : '/'}
+                            className="btn-primary mt-6"
+                        >
+                            {scopedBook ? 'Volver a la investigación' : 'Ir a la biblioteca'}
+                        </Link>
                     </div>
                 )}
 
                 <div className="flex flex-col gap-4">
                     {conversations.map((conversation) => (
                         <Link
-                            href={`/history/${conversation.id}`}
+                            href={
+                                scopedBook
+                                    ? `/history/${conversation.id}?bookId=${encodeURIComponent(scopedBook.id)}`
+                                    : `/history/${conversation.id}`
+                            }
                             key={conversation.id}
                             className="group flex gap-4 rounded-2xl border border-[var(--border-subtle)] bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5"
                         >

@@ -102,6 +102,11 @@ export interface EndSessionResult {
     error?: string;
 }
 
+export interface LinkVapiCallResult {
+    success: boolean;
+    error?: string;
+}
+
 export type TurnRole = 'assistant' | 'user';
 
 export interface SaveTurnInput {
