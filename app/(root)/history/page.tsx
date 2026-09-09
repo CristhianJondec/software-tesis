@@ -6,6 +6,7 @@ import { getConversationHistory } from '@/lib/actions/session.actions';
 import { formatDuration } from '@/lib/utils';
 
 export const metadata = { title: 'Historial — Investfied' };
+export const dynamic = 'force-dynamic';
 
 const dateFormatter = new Intl.DateTimeFormat('es-PE', {
     dateStyle: 'long',

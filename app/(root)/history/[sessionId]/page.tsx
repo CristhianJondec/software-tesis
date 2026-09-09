@@ -6,6 +6,8 @@ import Transcript from '@/components/Transcript';
 import { getConversationById } from '@/lib/actions/session.actions';
 import { formatDuration } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 const dateFormatter = new Intl.DateTimeFormat('es-PE', {
     dateStyle: 'long',
     timeStyle: 'short',
