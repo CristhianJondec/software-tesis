@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID!;
@@ -28,4 +28,12 @@ export const getObjectStream = async (key: string) => {
         contentType: response.ContentType,
         contentLength: response.ContentLength,
     };
+};
+
+export const deleteObjects = async (keys: Array<string | null | undefined>) => {
+    const uniqueKeys = [...new Set(keys.filter((key): key is string => Boolean(key)))];
+
+    await Promise.all(
+        uniqueKeys.map((key) => r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))),
+    );
 };

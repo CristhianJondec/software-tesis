@@ -2,12 +2,14 @@
 
 import { and, cosineDistance, desc, eq, ilike, or } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
 import { books, bookSegments } from '@/database/schema';
 import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
 import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
+import { deleteObjects } from '@/lib/r2';
 import { generateSlug } from '@/lib/utils';
 import type { CreateBook, TextSegment } from '@/types';
 
@@ -117,6 +119,39 @@ export const getBookBySlug = async (slug: string) => {
     } catch (e) {
         console.error('Error fetching book by slug', e);
         return { success: false, error: e };
+    }
+};
+
+export const deleteBook = async (bookId: string) => {
+    try {
+        const user = await requireUser();
+
+        const deleted = await db
+            .delete(books)
+            .where(and(eq(books.id, bookId), eq(books.userId, user.id)))
+            .returning({
+                id: books.id,
+                fileBlobKey: books.fileBlobKey,
+                coverBlobKey: books.coverBlobKey,
+            });
+
+        if (deleted.length === 0) {
+            return { success: false, error: 'Investigación no encontrada o sin autorización' };
+        }
+
+        try {
+            await deleteObjects([deleted[0].fileBlobKey, deleted[0].coverBlobKey]);
+        } catch (storageError) {
+            // The database is authoritative. Do not restore an already deleted book if
+            // remote object cleanup fails; log it so the orphaned files can be audited.
+            console.error('Book deleted, but its storage objects could not be removed', storageError);
+        }
+
+        revalidatePath('/');
+        return { success: true };
+    } catch (e) {
+        console.error('Error deleting book', e);
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
     }
 };
 
