@@ -356,7 +356,8 @@ export function useVapi(book: IBook) {
             sessionIdRef.current = result.sessionId || null;
             // Opening of the thesis defense. Sent from here — not from the Vapi dashboard —
             // because it interpolates the actual thesis title. See docs/agente/.
-            const firstMessage = `Buenas tardes. Formo parte del jurado que evaluará su avance de investigación, titulado "${book.title}". Le invito a exponer brevemente su trabajo: de qué trata, qué problema aborda y en qué punto se encuentra. Cuando termine, iniciaré las preguntas.`;
+            const firstMessage = `Buen día. Soy parte del jurado que evaluará su investigación, "${book.title}". Cuénteme brevemente de qué trata y en qué punto se encuentra; luego iniciaré las preguntas.`;
+
 
             // Investfied currently exposes one voice only. The old ElevenLabs
             // choices remain documented in constants.ts and VoiceSelector.tsx for
