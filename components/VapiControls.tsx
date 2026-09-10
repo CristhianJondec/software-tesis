@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, History, Mic, MicOff } from "lucide-react";
+import { History, HelpCircle, Mic, MicOff } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import {IBook} from "@/types";
 import Image from "next/image";
@@ -8,10 +8,12 @@ import Link from "next/link";
 import Transcript from "@/components/Transcript";
 import {toast} from "sonner";
 
-import {useEffect} from "react";
+import {useEffect, useRef, useState} from "react";
 
 const VapiControls = ({ book }: { book: IBook }) => {
     const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, clearError, limitError, maxDurationSeconds } = useVapi(book)
+    const [showRequirements, setShowRequirements] = useState(false);
+    const requirementsRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (limitError) {
@@ -19,6 +21,26 @@ const VapiControls = ({ book }: { book: IBook }) => {
             clearError();
         }
     }, [limitError, clearError]);
+
+    useEffect(() => {
+        if (!showRequirements) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            if (requirementsRef.current && !requirementsRef.current.contains(event.target as Node)) {
+                setShowRequirements(false);
+            }
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setShowRequirements(false);
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showRequirements]);
 
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -91,7 +113,7 @@ const VapiControls = ({ book }: { book: IBook }) => {
                             </Link>
                         </div>
 
-                        <div className="flex flex-wrap gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <div className="vapi-status-indicator">
                                 <span className={`vapi-status-dot ${statusDisplay.color}`} />
                                 <span className="vapi-status-text">{statusDisplay.label}</span>
@@ -102,26 +124,36 @@ const VapiControls = ({ book }: { book: IBook }) => {
                                     {formatDuration(duration)}/{formatDuration(maxDurationSeconds)}
                                 </span>
                             </div>
+
+                            <div className="relative" ref={requirementsRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRequirements((prev) => !prev)}
+                                    aria-expanded={showRequirements}
+                                    aria-label="Requisitos antes de iniciar la conversación"
+                                    className="flex size-6 items-center justify-center rounded-full text-[#8a7350] transition-colors hover:bg-[#fff6e5] hover:text-[#663820]"
+                                >
+                                    <HelpCircle className="size-5" aria-hidden="true" />
+                                </button>
+
+                                {showRequirements && (
+                                    <div
+                                        role="tooltip"
+                                        className="absolute left-0 top-full z-10 mt-2 w-64 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-950 shadow-lg"
+                                    >
+                                        <p className="font-semibold">Antes de iniciar la conversación</p>
+                                        <p className="mt-1">
+                                            Necesitas conexión estable, micrófono y parlantes o
+                                            audífonos activos. Si algún servicio externo de voz o
+                                            IA falla, podrían presentarse demoras o una
+                                            interrupción de la sesión.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <aside
-                    className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
-                    aria-label="Requisitos y limitaciones de la conversación por voz"
-                >
-                    <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-                    <div>
-                        <p className="font-semibold">Antes de iniciar la conversación</p>
-                        <p>
-                            Necesitas una conexión estable, permitir el acceso al micrófono y tener
-                            parlantes o audífonos activos. La conversación depende de servicios
-                            externos de voz, transcripción e inteligencia artificial; si alguno no
-                            está disponible, podrían presentarse demoras, respuestas incompletas o
-                            una interrupción de la sesión.
-                        </p>
-                    </div>
-                </aside>
 
             <div className="vapi-transcript-wrapper">
                 <div className="transcript-container min-h-[400px]">
