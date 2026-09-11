@@ -1,6 +1,6 @@
 'use server';
 
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
@@ -58,7 +58,7 @@ async function loadUserAndResponses(userId: string) {
         db.select({ id: voiceSessions.id })
             .from(voiceSessions)
             .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id))
-            .where(eq(voiceSessions.userId, userId))
+            .where(and(eq(voiceSessions.userId, userId), eq(sessionTurns.role, 'user')))
             .limit(1),
     ]);
 
@@ -203,7 +203,8 @@ export async function getAdminSurveyOverview(): Promise<{
             }).from(surveyResponses).orderBy(asc(surveyResponses.submittedAt)),
             db.selectDistinct({ userId: voiceSessions.userId })
                 .from(voiceSessions)
-                .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id)),
+                .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id))
+                .where(eq(sessionTurns.role, 'user')),
         ]);
 
         const responsesByUser = new Map<string, StoredResponse[]>();
