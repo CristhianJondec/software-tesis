@@ -9,7 +9,7 @@ import { BookUploadFormValues } from '@/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES } from '@/lib/constants';
+import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, MAX_BOOKS_PER_USER } from '@/lib/constants';
 import FileUploader from './FileUploader';
 // VoiceSelector is intentionally not imported while only the default Vapi voice is available.
 // Restore the import and the commented form field below when multiple voices are enabled.
@@ -128,7 +128,11 @@ const UploadForm = () => {
             });
 
             if(!book.success) {
-                toast.error(book.error as string || "Error al crear la investigación");
+                if (book.error === 'limit_reached') {
+                    toast.error(`Alcanzaste tu límite de ${MAX_BOOKS_PER_USER} investigaciones.`);
+                } else {
+                    toast.error(book.error as string || "Error al crear la investigación");
+                }
                 return;
             }
 
@@ -147,7 +151,7 @@ const UploadForm = () => {
             }
 
             form.reset();
-            router.push('/');
+            router.push(`/books/${book.data!.slug}`);
         } catch (error) {
             console.error(error);
 

@@ -56,6 +56,7 @@ export function useVapi(book: IBook) {
     const [currentUserMessage, setCurrentUserMessage] = useState('');
     const [duration, setDuration] = useState(0);
     const [limitError, setLimitError] = useState<string | null>(null);
+    const [isMuted, setIsMuted] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
@@ -134,6 +135,7 @@ export function useVapi(book: IBook) {
                 setStatus('starting'); // AI speaks first, wait for it
                 setCurrentMessage('');
                 setCurrentUserMessage('');
+                setIsMuted(false);
 
                 // Start duration timer
                 startTimeRef.current = Date.now();
@@ -161,6 +163,7 @@ export function useVapi(book: IBook) {
                 setStatus('idle');
                 setCurrentMessage('');
                 setCurrentUserMessage('');
+                setIsMuted(false);
 
                 // Stop timer
                 if (timerRef.current) {
@@ -411,6 +414,12 @@ export function useVapi(book: IBook) {
         getVapi().stop();
     }, []);
 
+    const toggleMuted = useCallback(() => {
+        const next = !getVapi().isMuted();
+        getVapi().setMuted(next);
+        setIsMuted(next);
+    }, []);
+
     const clearError = useCallback(() => {
         setLimitError(null);
     }, []);
@@ -430,6 +439,8 @@ export function useVapi(book: IBook) {
         duration,
         start,
         stop,
+        isMuted,
+        toggleMuted,
         limitError,
         maxDurationSeconds,
         clearError,

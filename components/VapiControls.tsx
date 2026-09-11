@@ -1,6 +1,6 @@
 'use client';
 
-import { History, HelpCircle, Mic, MicOff } from "lucide-react";
+import { History, HelpCircle, Mic, MicOff, Play, PhoneOff } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import {IBook} from "@/types";
 import Image from "next/image";
@@ -11,7 +11,7 @@ import {toast} from "sonner";
 import {useEffect, useRef, useState} from "react";
 
 const VapiControls = ({ book }: { book: IBook }) => {
-    const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, clearError, limitError, maxDurationSeconds } = useVapi(book)
+    const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, isMuted, toggleMuted, clearError, limitError, maxDurationSeconds } = useVapi(book)
     const [showRequirements, setShowRequirements] = useState(false);
     const requirementsRef = useRef<HTMLDivElement>(null);
 
@@ -87,9 +87,25 @@ const VapiControls = ({ book }: { book: IBook }) => {
                                 className={`vapi-mic-btn shadow-md !w-[60px] !h-[60px] z-10 ${isActive ? 'vapi-mic-btn-active' : 'vapi-mic-btn-inactive'}`}
                             >
                                 {isActive ? (
-                                    <Mic className="size-7 text-white" />
+                                    <PhoneOff className="size-7 text-white" />
                                 ) : (
-                                    <MicOff className="size-7 text-[#212a3b]" />
+                                    <Play className="size-7 text-[#212a3b] ml-0.5" />
+                                )}
+                            </button>
+                        </div>
+
+                        <div className="vapi-mic-wrapper-left relative">
+                            <button
+                                type="button"
+                                onClick={toggleMuted}
+                                disabled={!isActive}
+                                aria-label={isMuted ? 'Activar micrófono' : 'Silenciar micrófono'}
+                                className={`vapi-toggle-btn z-10 ${isMuted ? 'vapi-toggle-btn-on' : 'vapi-toggle-btn-off'}`}
+                            >
+                                {isMuted ? (
+                                    <MicOff className="size-5 text-white" />
+                                ) : (
+                                    <Mic className="size-5 text-[#212a3b]" />
                                 )}
                             </button>
                         </div>

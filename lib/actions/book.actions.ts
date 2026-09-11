@@ -1,12 +1,12 @@
 'use server';
 
-import { and, cosineDistance, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, count, cosineDistance, desc, eq, ilike, or } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
 import { books, bookSegments } from '@/database/schema';
-import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
+import { MAX_BOOKS_PER_USER, RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
 import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
 import { deleteObjects } from '@/lib/r2';
@@ -61,6 +61,23 @@ export const checkBookExists = async (title: string) => {
     }
 };
 
+export const getUserBookCount = async () => {
+    try {
+        const session = await getSession();
+        if (!session?.user) return { success: true, data: 0 };
+
+        const [row] = await db
+            .select({ value: count() })
+            .from(books)
+            .where(eq(books.userId, session.user.id));
+
+        return { success: true, data: row?.value ?? 0 };
+    } catch (e) {
+        console.error('Error counting books', e);
+        return { success: false, error: e, data: 0 };
+    }
+};
+
 export const createBook = async (data: CreateBook) => {
     try {
         const user = await requireUser();
@@ -76,6 +93,15 @@ export const createBook = async (data: CreateBook) => {
 
         if (existing.length > 0) {
             return { success: true, data: existing[0], alreadyExists: true };
+        }
+
+        const [{ value: bookCount }] = await db
+            .select({ value: count() })
+            .from(books)
+            .where(eq(books.userId, userId));
+
+        if (bookCount >= MAX_BOOKS_PER_USER) {
+            return { success: false, error: 'limit_reached' };
         }
 
         const [book] = await db

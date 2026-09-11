@@ -1,6 +1,12 @@
 import UploadForm from "@/components/UploadForm";
+import LimitReachedModal from "@/components/LimitReachedModal";
+import { getUserBookCount } from "@/lib/actions/book.actions";
+import { MAX_BOOKS_PER_USER } from "@/lib/constants";
 
-const Page = () => {
+const Page = async () => {
+    const bookCount = await getUserBookCount();
+    const limitReached = (bookCount.data ?? 0) >= MAX_BOOKS_PER_USER;
+
     return (
         <main className="new-book">
             <section className="flex flex-col gap-5 text-center">
@@ -8,7 +14,7 @@ const Page = () => {
                 <p className="subtitle">Sube un PDF para generar tu experiencia de investigación interactiva</p>
             </section>
 
-            <UploadForm />
+            {limitReached ? <LimitReachedModal /> : <UploadForm />}
         </main>
     )
 }

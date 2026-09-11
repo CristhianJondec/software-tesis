@@ -418,6 +418,28 @@
   .vapi-mic-wrapper {
     @apply absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2;
   }
+  .vapi-mic-wrapper-left {
+    @apply absolute -bottom-1 -left-1 sm:-bottom-2 sm:-left-2;
+  }
+  .vapi-toggle-btn {
+    @apply relative w-[38px] h-[38px] sm:w-[46px] sm:h-[46px] cursor-pointer rounded-full flex items-center justify-center transition-all duration-300 border-0 bg-white shadow-md;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+    &:active {
+      transform: scale(0.95);
+    }
+    &:disabled {
+      @apply opacity-40 cursor-not-allowed;
+    }
+  }
+  .vapi-toggle-btn-on {
+    @apply bg-[#212a3b];
+  }
+  .vapi-toggle-btn-off {
+    @apply bg-white;
+  }
   .vapi-pulse-ring {
     @apply absolute inset-0 w-[50px] h-[50px] sm:w-[60px] sm:h-[60px] bg-white rounded-full opacity-50 animate-ping;
   }

@@ -11,6 +11,11 @@ export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'im
 // Operational cap for a single live call. It is not tied to a payment plan.
 export const MAX_SESSION_DURATION_MINUTES = 60;
 
+// Maximum number of investigaciones (books) a single user can have at once.
+// Independent of the legacy subscription/billing scaffolding — do not read
+// PLAN_LIMITS.maxBooks for this.
+export const MAX_BOOKS_PER_USER = 4;
+
 // Pre-configured VAPI assistant ID (hardcoded for this app)
 export const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 
