@@ -2,11 +2,15 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, X } from 'lucide-react';
+import { Check, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { saveTurnEvaluation, type ReviewTurn } from '@/lib/actions/metrics.actions';
+import {
+    deleteTurnEvaluation,
+    saveTurnEvaluation,
+    type ReviewTurn,
+} from '@/lib/actions/metrics.actions';
 import { formatMs } from '@/lib/metrics/format';
 
 /**
@@ -53,6 +57,32 @@ export default function TurnReviewList({ turns }: { turns: ReviewTurn[] }) {
                     [turn.turnId]: { isCorrect: turn.isCorrect, notes },
                 }));
                 toast.error(result.error ?? 'No se pudo guardar la evaluación.');
+                return;
+            }
+
+            router.refresh();
+        });
+    };
+
+    const clearMark = (turn: ReviewTurn) => {
+        const previous = verdicts[turn.turnId] ?? {
+            isCorrect: turn.isCorrect,
+            notes: turn.notes ?? '',
+        };
+
+        setVerdicts((current) => ({
+            ...current,
+            [turn.turnId]: { isCorrect: null, notes: '' },
+        }));
+        setSavingId(turn.turnId);
+
+        startTransition(async () => {
+            const result = await deleteTurnEvaluation(turn.turnId);
+            setSavingId(null);
+
+            if (!result.success) {
+                setVerdicts((current) => ({ ...current, [turn.turnId]: previous }));
+                toast.error(result.error ?? 'No se pudo quitar la evaluación.');
                 return;
             }
 
@@ -156,6 +186,18 @@ export default function TurnReviewList({ turns }: { turns: ReviewTurn[] }) {
                                 <X className="icon-sm" />
                                 Incorrecta
                             </Button>
+                            {verdict.isCorrect !== null && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={isPending && savingId === turn.turnId}
+                                    onClick={() => clearMark(turn)}
+                                >
+                                    <RotateCcw className="icon-sm" />
+                                    Dejar pendiente
+                                </Button>
+                            )}
 
                             <input
                                 type="text"

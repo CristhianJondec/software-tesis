@@ -120,6 +120,9 @@ Create a new file named `.env` in the root of your project and add the following
 NODE_ENV='development'
 NEXT_PUBLIC_BASE_URL=
 
+# Único correo con acceso a /admin
+ADMIN_EMAIL=tu-correo@ejemplo.com
+
 # CLERK
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=

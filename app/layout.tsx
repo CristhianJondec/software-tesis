@@ -4,6 +4,8 @@ import { IBM_Plex_Serif, Mona_Sans} from "next/font/google";
 import Navbar from "@/components/Navbar";
 import "./globals.css";
 import {Toaster} from "@/components/ui/sonner";
+import {checkMetricsAccess} from "@/lib/metrics/access";
+import {checkAdminAccess} from "@/lib/admin/access";
 
 const ibmPlexSerif = IBM_Plex_Serif({
     variable: "--font-ibm-plex-serif",
@@ -28,17 +30,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [metricsAccess, adminAccess] = await Promise.all([
+    checkMetricsAccess(),
+    checkAdminAccess(),
+  ]);
+
   return (
     <html lang="es">
       <body
         className={`${ibmPlexSerif.variable} ${monaSans.variable} relative font-sans antialiased`}
       >
-        <Navbar />
+        <Navbar showMetrics={metricsAccess.allowed} showAdmin={adminAccess.allowed} />
         {children}
         <Toaster />
       </body>

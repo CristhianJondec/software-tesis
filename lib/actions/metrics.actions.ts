@@ -1,11 +1,11 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
-import { ragasEvaluations, turnEvaluations } from '@/database/schema';
+import { ragasEvaluations, sessionTurns, turnEvaluations } from '@/database/schema';
 import { generateQueryEmbedding } from '@/lib/embeddings';
 import { requireResearchOwner } from '@/lib/metrics/access';
 import { buildAllCsvFiles, type CsvFile } from '@/lib/metrics/exports';
@@ -181,6 +181,16 @@ export interface SaveEvaluationInput {
     notes?: string | null;
 }
 
+async function agentTurnExists(turnId: string): Promise<boolean> {
+    const [turn] = await db
+        .select({ id: sessionTurns.id })
+        .from(sessionTurns)
+        .where(and(eq(sessionTurns.id, turnId), eq(sessionTurns.role, 'assistant')))
+        .limit(1);
+
+    return Boolean(turn);
+}
+
 export const saveTurnEvaluation = async (
     input: SaveEvaluationInput,
 ): Promise<{ success: boolean; error?: string }> => {
@@ -188,6 +198,9 @@ export const saveTurnEvaluation = async (
         const { userId } = await requireResearchOwner();
 
         if (!input.turnId) return { success: false, error: 'Falta el turno a evaluar.' };
+        if (!(await agentTurnExists(input.turnId))) {
+            return { success: false, error: 'La respuesta del agente no existe o no se puede evaluar.' };
+        }
 
         const notes = input.notes?.trim() || null;
 
@@ -223,6 +236,11 @@ export const deleteTurnEvaluation = async (
 ): Promise<{ success: boolean; error?: string }> => {
     try {
         await requireResearchOwner();
+
+        if (!turnId) return { success: false, error: 'Falta el turno a evaluar.' };
+        if (!(await agentTurnExists(turnId))) {
+            return { success: false, error: 'La respuesta del agente no existe o no se puede evaluar.' };
+        }
 
         await db.delete(turnEvaluations).where(eq(turnEvaluations.turnId, turnId));
 

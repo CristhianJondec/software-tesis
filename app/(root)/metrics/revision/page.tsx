@@ -62,6 +62,17 @@ const ReviewPage = async ({ searchParams }: { searchParams: Promise<{ filtro?: s
                 como pendiente.
             </p>
 
+            <div className="mt-5 max-w-3xl rounded-xl border border-black/10 bg-white/70 p-5 text-sm leading-6">
+                <p className="font-semibold">Criterio de revisión</p>
+                <p className="mt-1 text-[var(--text-secondary)]">
+                    Marca <strong>Correcta</strong> cuando la intervención sea coherente con los
+                    fragmentos recuperados, relevante para lo dicho por el estudiante y adecuada
+                    al rol de docente evaluador. Marca <strong>Incorrecta</strong> si contradice el
+                    documento, inventa información, resulta irrelevante o no constituye una
+                    intervención comprensible. Usa la nota para justificar los casos dudosos.
+                </p>
+            </div>
+
             <p className="mt-3 text-sm text-[var(--text-secondary)]">
                 {formatNumber(reviewed)} de {formatNumber(total)} turnos revisados (
                 {formatPercent(percentage)}) · {formatNumber(pending)} pendientes

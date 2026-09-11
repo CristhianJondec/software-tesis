@@ -290,7 +290,7 @@ export default async function ConversationHistoryPage({
                         )}
                     </section>
 
-                    {/* <section id="evaluacion" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
+                    <section id="evaluacion" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
                         <SectionTitle
                             icon={BarChart3}
                             title="Evaluación de respuestas"
@@ -311,7 +311,7 @@ export default async function ConversationHistoryPage({
                                 value={numberFormatter.format(Math.max(0, assistantTurns.length - reviewed))}
                             />
                         </div>
-                    </section> */}
+                    </section>
 
                     <section id="vapi" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
                         <SectionTitle

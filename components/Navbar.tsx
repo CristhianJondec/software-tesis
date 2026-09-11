@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, History, LogOut } from 'lucide-react';
+import { BarChart3, ChevronDown, History, LogOut, ShieldCheck } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ const navItems = [
     { label: 'Agregar', href: '/books/new' },
 ];
 
-const Navbar = () => {
+const Navbar = ({ showMetrics = false, showAdmin = false }: { showMetrics?: boolean; showAdmin?: boolean }) => {
     const pathName = usePathname();
     const router = useRouter();
     const { data: session, isPending } = useSession();
@@ -55,6 +55,18 @@ const Navbar = () => {
                         );
                     })}
 
+                    {user && (
+                        <Link
+                            href="/surveys"
+                            className={cn(
+                                'nav-link-base',
+                                pathName.startsWith('/surveys') ? 'nav-link-active' : 'text-black hover:opacity-70',
+                            )}
+                        >
+                            Encuestas
+                        </Link>
+                    )}
+
                     <div className="flex items-center">
                         {!isPending && !user && (
                             <Button variant="outline" asChild>
@@ -88,6 +100,24 @@ const Navbar = () => {
                                                 Historial
                                             </Link>
                                         </DropdownMenu.Item>
+
+                                        {showMetrics && (
+                                            <DropdownMenu.Item asChild>
+                                                <Link href="/metrics" className="profile-menu-item">
+                                                    <BarChart3 className="size-4" />
+                                                    Métricas y revisión PR
+                                                </Link>
+                                            </DropdownMenu.Item>
+                                        )}
+
+                                        {showAdmin && (
+                                            <DropdownMenu.Item asChild>
+                                                <Link href="/admin" className="profile-menu-item">
+                                                    <ShieldCheck className="size-4" />
+                                                    Usuarios y encuestas
+                                                </Link>
+                                            </DropdownMenu.Item>
+                                        )}
 
                                         <DropdownMenu.Item
                                             className="profile-menu-item text-red-700 focus:text-red-700"
