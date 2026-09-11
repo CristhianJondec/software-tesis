@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Check, Circle, Clock3, LockKeyhole, Minus } from 'lucide-react';
+import { Check, Circle, Clock3, LockKeyhole, Minus, Timer } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { getSurveyProgress, type SurveyStageStatus } from '@/lib/actions/survey.actions';
@@ -74,12 +74,18 @@ export default async function SurveysPage() {
                                         <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold', status.className)}>
                                             <Icon className="size-3.5" /> {status.label}
                                         </span>
+                                        <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
+                                            <Timer className="size-3.5" /> ~ {stage.estimatedMinutes} minutos
+                                        </span>
                                         {stage.submittedAt && (
                                             <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
                                                 <Clock3 className="size-3.5" /> {formatDateTime(stage.submittedAt)}
                                             </span>
                                         )}
                                     </div>
+                                    {stage.status === 'pending' && stage.blockedReason && (
+                                        <p className="mt-2 text-sm text-[var(--text-secondary)]">{stage.blockedReason}</p>
+                                    )}
                                 </div>
                             </div>
                             <div className="mt-4 shrink-0 sm:mt-0">

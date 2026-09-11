@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, Clock3, LockKeyhole } from 'lucide-react';
 
 import SurveyForm from '@/components/surveys/SurveyForm';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ export default async function SurveyStagePage({ params }: { params: Promise<{ st
             ? 'Esta etapa ya fue enviada y no admite modificaciones.'
             : progressStage.status === 'not_applicable'
                 ? 'Esta etapa no corresponde a tu grupo de estudio.'
-                : 'Completa primero la etapa anterior para desbloquear esta encuesta.';
+                : progressStage.blockedReason ?? 'Completa primero la etapa anterior para desbloquear esta encuesta.';
         return (
             <main className="wrapper container">
                 <div className="max-w-2xl rounded-2xl border border-black/10 bg-white p-8 shadow-sm">
@@ -51,6 +51,9 @@ export default async function SurveyStagePage({ params }: { params: Promise<{ st
             <header className="mb-8 max-w-4xl">
                 <p className="mb-2 text-sm font-bold uppercase tracking-[0.18em] text-[#663820]">Cuestionario</p>
                 <h1 className="page-title-xl">{stage.title}</h1>
+                <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]">
+                    <Clock3 className="size-4" /> Tiempo estimado: ~ {stage.estimatedMinutes} minutos
+                </p>
                 <p className="mt-5 rounded-xl border-l-4 border-[#d4a853] bg-white p-5 leading-7 text-[var(--text-secondary)] shadow-sm">
                     {instrument.instructions}
                 </p>

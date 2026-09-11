@@ -5,33 +5,25 @@ import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
-import { surveyResponses, users, type SurveyAnswers } from '@/database/schema';
+import { sessionTurns, surveyResponses, users, voiceSessions, type SurveyAnswers } from '@/database/schema';
 import { requireAdmin } from '@/lib/admin/access';
 import { requireUser } from '@/lib/session';
 import {
     findSurveyStage,
     isStageApplicable,
-    responseKey,
     SURVEY_INSTRUMENTS,
     SURVEY_STAGES,
     type SurveyPhase,
     type SurveyStageId,
     type SurveyType,
 } from '@/lib/surveys/catalog';
+import {
+    buildSurveyProgress,
+    type SurveyProgressStage,
+} from '@/lib/surveys/progress';
 import { computeSurveyScore, validateSurveyAnswers } from '@/lib/surveys/scoring';
 
-export type SurveyStageStatus = 'pending' | 'available' | 'completed' | 'not_applicable';
-
-export interface SurveyProgressStage {
-    id: SurveyStageId;
-    type: SurveyType;
-    phase: SurveyPhase;
-    title: string;
-    shortTitle: string;
-    status: SurveyStageStatus;
-    submittedAt: string | null;
-    computedScore: number | null;
-}
+export type { SurveyProgressStage, SurveyStageStatus } from '@/lib/surveys/progress';
 
 export interface SurveyProgress {
     participantCode: string | null;
@@ -49,37 +41,8 @@ interface StoredResponse {
     submittedAt: Date;
 }
 
-function buildProgress(studyGroup: string | null, responses: StoredResponse[]): SurveyProgressStage[] {
-    const responseByStage = new Map(
-        responses.map((response) => [responseKey(response.surveyType as SurveyType, response.phase as SurveyPhase), response]),
-    );
-    let priorApplicableStagesCompleted = true;
-
-    return SURVEY_STAGES.map((stage) => {
-        const applicable = isStageApplicable(stage, studyGroup);
-        const response = responseByStage.get(responseKey(stage.type, stage.phase));
-
-        if (!applicable) {
-            return { ...stage, status: 'not_applicable' as const, submittedAt: null, computedScore: null };
-        }
-
-        if (response) {
-            return {
-                ...stage,
-                status: 'completed' as const,
-                submittedAt: response.submittedAt.toISOString(),
-                computedScore: response.computedScore,
-            };
-        }
-
-        const status: SurveyStageStatus = priorApplicableStagesCompleted ? 'available' : 'pending';
-        priorApplicableStagesCompleted = false;
-        return { ...stage, status, submittedAt: null, computedScore: null };
-    });
-}
-
 async function loadUserAndResponses(userId: string) {
-    const [userRows, responses] = await Promise.all([
+    const [userRows, responses, conversationRows] = await Promise.all([
         db.select({
             id: users.id,
             participantCode: users.participantCode,
@@ -92,18 +55,23 @@ async function loadUserAndResponses(userId: string) {
             computedScore: surveyResponses.computedScore,
             submittedAt: surveyResponses.submittedAt,
         }).from(surveyResponses).where(eq(surveyResponses.userId, userId)),
+        db.select({ id: voiceSessions.id })
+            .from(voiceSessions)
+            .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id))
+            .where(eq(voiceSessions.userId, userId))
+            .limit(1),
     ]);
 
-    return { user: userRows[0], responses };
+    return { user: userRows[0], responses, hasConversation: conversationRows.length > 0 };
 }
 
 export async function getSurveyProgress(): Promise<{ success: boolean; data?: SurveyProgress; error?: string }> {
     try {
         const sessionUser = await requireUser();
-        const { user, responses } = await loadUserAndResponses(sessionUser.id);
+        const { user, responses, hasConversation } = await loadUserAndResponses(sessionUser.id);
         if (!user) return { success: false, error: 'No se encontró tu cuenta.' };
 
-        const stages = buildProgress(user.studyGroup, responses);
+        const stages = buildSurveyProgress(user.studyGroup, responses, hasConversation);
         const applicable = stages.filter((stage) => stage.status !== 'not_applicable');
         return {
             success: true,
@@ -135,25 +103,19 @@ export async function submitSurvey(input: SubmitSurveyInput): Promise<{ success:
             return { success: false, error: 'Las respuestas enviadas no son válidas.' };
         }
 
-        const { user, responses } = await loadUserAndResponses(sessionUser.id);
+        const { user, responses, hasConversation } = await loadUserAndResponses(sessionUser.id);
         if (!user) return { success: false, error: 'No se encontró tu cuenta.' };
         if (!isStageApplicable(stage, user.studyGroup)) {
             return { success: false, error: 'Esta encuesta no corresponde a tu grupo de estudio.' };
         }
 
-        const completed = new Set(
-            responses.map((response) => responseKey(response.surveyType as SurveyType, response.phase as SurveyPhase)),
-        );
-        const stageKey = responseKey(stage.type, stage.phase);
-        if (completed.has(stageKey)) {
+        const progressStage = buildSurveyProgress(user.studyGroup, responses, hasConversation)
+            .find((candidate) => candidate.id === stage.id);
+        if (progressStage?.status === 'completed') {
             return { success: false, error: 'Esta etapa ya fue enviada y no puede editarse.' };
         }
-
-        const firstMissing = SURVEY_STAGES.find(
-            (candidate) => isStageApplicable(candidate, user.studyGroup) && !completed.has(responseKey(candidate.type, candidate.phase)),
-        );
-        if (!firstMissing || firstMissing.id !== stage.id) {
-            return { success: false, error: 'Completa primero la etapa anterior para desbloquear esta encuesta.' };
+        if (progressStage?.status !== 'available') {
+            return { success: false, error: progressStage?.blockedReason ?? 'Esta encuesta todavía no está disponible.' };
         }
 
         const answers = validateSurveyAnswers(stage.type, input.answers);
@@ -222,7 +184,7 @@ export async function getAdminSurveyOverview(): Promise<{
 }> {
     try {
         await requireAdmin();
-        const [allUsers, allResponses] = await Promise.all([
+        const [allUsers, allResponses, usersWithConversations] = await Promise.all([
             db.select({
                 id: users.id,
                 name: users.name,
@@ -239,6 +201,9 @@ export async function getAdminSurveyOverview(): Promise<{
                 computedScore: surveyResponses.computedScore,
                 submittedAt: surveyResponses.submittedAt,
             }).from(surveyResponses).orderBy(asc(surveyResponses.submittedAt)),
+            db.selectDistinct({ userId: voiceSessions.userId })
+                .from(voiceSessions)
+                .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id)),
         ]);
 
         const responsesByUser = new Map<string, StoredResponse[]>();
@@ -247,6 +212,7 @@ export async function getAdminSurveyOverview(): Promise<{
             list.push(response);
             responsesByUser.set(response.userId, list);
         }
+        const conversationUserIds = new Set(usersWithConversations.map((row) => row.userId));
 
         const data = allUsers.map((user): AdminUserSurveyRow => {
             const responses = responsesByUser.get(user.id) ?? [];
@@ -259,7 +225,7 @@ export async function getAdminSurveyOverview(): Promise<{
             return {
                 ...user,
                 createdAt: user.createdAt.toISOString(),
-                stages: buildProgress(user.studyGroup, responses),
+                stages: buildSurveyProgress(user.studyGroup, responses, conversationUserIds.has(user.id)),
                 responses: SURVEY_STAGES.flatMap((stage) => {
                     const response = responses.find((row) => row.surveyType === stage.type && row.phase === stage.phase);
                     if (!response) return [];
