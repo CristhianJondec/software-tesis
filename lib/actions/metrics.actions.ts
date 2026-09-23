@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/database/db';
 import { ragasEvaluations, sessionTurns, turnEvaluations } from '@/database/schema';
 import { generateQueryEmbedding } from '@/lib/embeddings';
+import { FEEDBACK_PROMPT_VERSION } from '@/lib/feedback/evaluate';
 import { requireResearchOwner } from '@/lib/metrics/access';
 import { buildAllCsvFiles, type CsvFile } from '@/lib/metrics/exports';
 import { geminiJudge, JUDGE_MODEL } from '@/lib/metrics/judge';
@@ -15,6 +16,7 @@ import {
     fetchRagasScores,
     fetchRetrievals,
     fetchSessions,
+    fetchTurnFeedback,
     fetchTurns,
 } from '@/lib/metrics/queries';
 import { RAGAS_PROMPT_VERSION, computeRagasForTriple } from '@/lib/metrics/ragas';
@@ -35,15 +37,16 @@ import { buildRagasTriples, type RetrievedContext } from '@/lib/metrics/triples'
  */
 
 async function loadInput(): Promise<MetricsInput> {
-    const [turns, sessions, retrievals, evaluations, ragasRows] = await Promise.all([
+    const [turns, sessions, retrievals, evaluations, ragasRows, feedbackRows] = await Promise.all([
         fetchTurns(),
         fetchSessions(),
         fetchRetrievals(),
         fetchEvaluations(),
         fetchRagasScores(RAGAS_PROMPT_VERSION),
+        fetchTurnFeedback(FEEDBACK_PROMPT_VERSION),
     ]);
 
-    return { turns, sessions, retrievals, evaluations, ragasRows };
+    return { turns, sessions, retrievals, evaluations, ragasRows, feedbackRows };
 }
 
 /** What /metrics renders: the report plus the judge model it should quote next to the RAGAs scores. */

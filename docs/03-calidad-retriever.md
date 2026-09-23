@@ -128,3 +128,25 @@ En `app/api/vapi/search-book/route.ts`:
 `splitIntoSegments` cambió de firma (`string` -> `PdfPage[]`) y de archivo
 (`lib/utils.ts` -> `lib/segmentation.ts`). El único consumidor era
 `parsePDFFile`, ya actualizado.
+
+### Verificación (2026-09-19)
+
+Se revisó el código contra cada punto de "Qué hacer". Todo sigue en pie:
+
+| Requisito | Estado |
+|---|---|
+| `parsePDFFile` construye `PdfPage[]` | `lib/utils.ts:99-114` |
+| `splitIntoSegments` recibe páginas y emite `pageNumber` | `lib/segmentation.ts:17-70` |
+| 500 palabras / solape 50 sin cambios | `SEGMENT_SIZE_WORDS`, `SEGMENT_OVERLAP_WORDS` |
+| Regla "página donde empieza" comentada en el código | `lib/segmentation.ts:57-60` |
+| `PdfPage` / `TextSegment.pageNumber` en `types.d.ts` | `types.d.ts:39-50` |
+| `distance` en el `select` | `lib/actions/book.actions.ts:254` |
+| Umbral aplicado y `topK`/umbral como constantes | `lib/constants.ts:118-140` |
+| `[Página N]` y mensaje de "no encontrado" alcanzable | `app/api/vapi/search-book/route.ts:38-62` |
+
+`npx tsc --noEmit` pasa sin errores. Único ajuste de esta sesión: el mapa de archivos de
+`CLAUDE.md` seguía diciendo que `splitIntoSegments` vive en `lib/utils.ts`; ahora apunta a
+`lib/segmentation.ts`.
+
+Lo de "Qué NO quedó hecho" sigue igual: la calibración empírica del umbral y los cuatro
+criterios de aceptación necesitan una investigación real ingestada y la base con datos.

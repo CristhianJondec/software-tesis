@@ -5,6 +5,10 @@ import type { InferSelectModel } from 'drizzle-orm';
 import z from 'zod';
 import { UploadSchema } from '@/lib/zod';
 import { books, bookSegments, sessionTurns, turnRetrievals, voiceSessions } from '@/database/schema';
+import type { PreviousSessionSummary } from '@/lib/difficulty/adaptation';
+import type { DifficultyLevelId, LevelSource } from '@/lib/difficulty/levels';
+import type { PreparationTopicId } from '@/lib/preparation/topics';
+import type { PredictionAnswers } from '@/lib/prediction/questions';
 
 // ============================================
 // DATABASE MODELS (inferred from Drizzle schema)
@@ -91,10 +95,56 @@ export interface FileUploadFieldProps<T extends FieldValues> {
     hint: string;
 }
 
+export interface StartSessionInput {
+    /** Level the student confirmed on the pre-session screen, 1-4. */
+    difficultyLevel?: number;
+    /** Self-report 0-10 taken right before starting. Undefined if skipped. */
+    preSessionAnxiety?: number | null;
+    /**
+     * Topics the student asked to practise, from the preparation map. Empty or
+     * undefined runs the whole defense. Narrowed again on the server.
+     */
+    focusTopics?: string[];
+    /**
+     * The three written predictions taken before connecting
+     * (docs/propuestas/04). All three optional; narrowed and tagged server-side.
+     */
+    prediction?: PredictionAnswers;
+}
+
 export interface StartSessionResult {
     success: boolean;
     sessionId?: string;
     maxDurationMinutes?: number;
+    /** Level the server actually stored — the client must run the session at this one. */
+    difficultyLevel?: DifficultyLevelId;
+    /** Derived server-side by re-running the rule, never taken from the client. */
+    levelSource?: LevelSource;
+    /** Topics the server accepted for this session. The prompt must use these. */
+    focusTopics?: PreparationTopicId[];
+    error?: string;
+}
+
+export interface SessionPreparation {
+    /** Last finished session with this document, or null on the first one. */
+    previous: PreviousSessionSummary | null;
+    /** ISO date of that session, shown to the student next to the justification. */
+    previousStartedAt: string | null;
+    /**
+     * What the student declared they would try differently when that session
+     * closed. Shown back before this one starts (docs/propuestas/04).
+     */
+    previousStrategy: string | null;
+}
+
+export interface SessionPreparationResult {
+    success: boolean;
+    data?: SessionPreparation;
+    error?: string;
+}
+
+export interface SaveAnxietyResult {
+    success: boolean;
     error?: string;
 }
 
@@ -123,6 +173,8 @@ export interface SaveTurnInput {
     studentLatencyMs?: number | null;
     /** Only on agent turns: end of the student turn -> start of the agent reply. */
     systemLatencyMs?: number | null;
+    /** Only on student turns: longest gap between two consecutive partial transcripts. */
+    maxPauseMs?: number | null;
 }
 
 export interface SaveTurnResult {

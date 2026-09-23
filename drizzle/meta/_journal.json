@@ -36,6 +36,48 @@
       "when": 1789095174597,
       "tag": "0004_pink_captain_midlands",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789607010897,
+      "tag": "0005_dry_ego",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789747967066,
+      "tag": "0006_good_eternals",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789841741814,
+      "tag": "0007_mute_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789852603721,
+      "tag": "0008_whole_cassandra_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789873141061,
+      "tag": "0009_dizzy_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789878753531,
+      "tag": "0010_neat_ezekiel",
+      "breakpoints": true
     }
   ]
 }

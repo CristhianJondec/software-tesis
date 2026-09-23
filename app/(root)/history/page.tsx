@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { ArrowRight, History, MessageCircle } from 'lucide-react';
 
 import { getConversationHistory } from '@/lib/actions/session.actions';
+import { getDifficultyLevel } from '@/lib/difficulty/levels';
+import { guardInterventionPage } from '@/lib/study/access';
 import { formatDuration } from '@/lib/utils';
 
 export const metadata = { title: 'Historial — Investfied' };
@@ -18,6 +20,8 @@ export default async function HistoryPage({
 }: {
     searchParams: Promise<{ bookId?: string }>;
 }) {
+    await guardInterventionPage();
+
     const { bookId } = await searchParams;
     const result = await getConversationHistory(bookId);
     const conversations = result.success ? result.data ?? [] : [];
@@ -111,6 +115,20 @@ export default async function HistoryPage({
                                     <span>{dateFormatter.format(conversation.startedAt)}</span>
                                     <span>{formatDuration(conversation.durationSeconds)}</span>
                                     <span>{Number(conversation.turnCount)} mensajes</span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    <span className="rounded-full bg-[#fff6e5] px-2.5 py-1 text-xs font-semibold text-[#663820]">
+                                        Nivel {getDifficultyLevel(conversation.difficultyLevel).id} —{' '}
+                                        {getDifficultyLevel(conversation.difficultyLevel).name}
+                                    </span>
+                                    {conversation.preSessionAnxiety !== null && (
+                                        <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-xs font-semibold text-[#3d485e]">
+                                            Autoevaluación {conversation.preSessionAnxiety}
+                                            {conversation.postSessionAnxiety !== null
+                                                ? ` → ${conversation.postSessionAnxiety}`
+                                                : ''}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 

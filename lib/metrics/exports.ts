@@ -28,6 +28,10 @@ const SESSION_HEADERS = [
     'inicio',
     'fin',
     'duracion_segundos',
+    'nivel_exigencia',
+    'origen_nivel',
+    'autoeval_previa',
+    'autoeval_posterior',
     'turnos',
     'turnos_agente',
     'turnos_estudiante',
@@ -49,6 +53,12 @@ const SESSION_HEADERS = [
     'ragas_context_precision',
     'ragas_context_recall',
     'ragas_n',
+    'fb_contenido_nivel_medio',
+    'fb_contenido_n',
+    'fb_contenido_no_concluyentes',
+    'fb_claridad_nivel_medio',
+    'fb_claridad_n',
+    'fb_claridad_no_concluyentes',
 ];
 
 export function buildSessionsCsv(report: MetricsReport): CsvFile {
@@ -62,6 +72,10 @@ export function buildSessionsCsv(report: MetricsReport): CsvFile {
         isoOrEmpty(session.startedAt),
         isoOrEmpty(session.endedAt),
         session.durationSeconds,
+        session.difficultyLevel,
+        session.levelSource,
+        session.preSessionAnxiety,
+        session.postSessionAnxiety,
         session.turns,
         session.agentTurns,
         session.studentTurns,
@@ -83,6 +97,12 @@ export function buildSessionsCsv(report: MetricsReport): CsvFile {
         session.ragas.contextPrecision.mean,
         session.ragas.contextRecall.mean,
         session.ragas.faithfulness.n,
+        session.feedbackContent.meanLevel,
+        session.feedbackContent.n,
+        session.feedbackContent.inconclusive,
+        session.feedbackClarity.meanLevel,
+        session.feedbackClarity.n,
+        session.feedbackClarity.inconclusive,
     ]);
 
     return { filename: 'metricas-sesiones.csv', content: toCsv(SESSION_HEADERS, rows) };

@@ -4,15 +4,32 @@ import {
     BarChart3,
     CheckCircle2,
     Cloud,
+    ClipboardList,
     Database,
+    Gauge,
     LockKeyhole,
     MessageSquareText,
     Timer,
+    Scale,
+    TrendingUp,
 } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
+import PredictionContrast from '@/components/PredictionContrast';
+import ProgressEvidence from '@/components/ProgressEvidence';
+import SessionReport from '@/components/SessionReport';
 import Transcript from '@/components/Transcript';
+import { getSessionFeedback } from '@/lib/actions/feedback.actions';
+import { getSessionPredictionContrast } from '@/lib/actions/prediction.actions';
+import { getSessionEvidence } from '@/lib/actions/progress.actions';
 import { getConversationById } from '@/lib/actions/session.actions';
+import { getDifficultyLevel } from '@/lib/difficulty/levels';
+import {
+    INCOMPLETE_ANSWER_MAX_WORDS,
+    LONG_SILENCE_MS,
+    summarizeSessionSignals,
+} from '@/lib/difficulty/signals';
+import { guardInterventionPage } from '@/lib/study/access';
 import { formatDuration } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +60,11 @@ function formatMilliseconds(value: number | null): string {
 
 function formatScore(value: number | null): string {
     return value === null ? 'Pendiente' : `${(value * 100).toFixed(1)} %`;
+}
+
+/** A self-report that was never given is "Sin respuesta", never 0. */
+function formatSelfReport(value: number | null): string {
+    return value === null ? 'Sin respuesta' : `${value} / 10`;
 }
 
 function friendlyCallStatus(status: string | null): string {
@@ -111,9 +133,16 @@ export default async function ConversationHistoryPage({
     params: Promise<{ sessionId: string }>;
     searchParams: Promise<{ bookId?: string }>;
 }) {
+    await guardInterventionPage();
+
     const { sessionId } = await params;
     const { bookId } = await searchParams;
-    const result = await getConversationById(sessionId);
+    const [result, feedbackResult, contrastResult, evidenceResult] = await Promise.all([
+        getConversationById(sessionId),
+        getSessionFeedback(sessionId),
+        getSessionPredictionContrast(sessionId),
+        getSessionEvidence(sessionId),
+    ]);
 
     if (!result.success || !result.data) notFound();
 
@@ -122,6 +151,9 @@ export default async function ConversationHistoryPage({
     const backHref = bookId === conversation.bookId
         ? `/history?bookId=${encodeURIComponent(conversation.bookId)}`
         : '/history';
+
+    const sessionLevel = getDifficultyLevel(conversation.difficultyLevel);
+    const sessionSignals = summarizeSessionSignals(turns);
 
     const studentTurns = turns.filter((turn) => turn.role === 'user');
     const assistantTurns = turns.filter((turn) => turn.role === 'assistant');
@@ -177,6 +209,10 @@ export default async function ConversationHistoryPage({
                 <nav className="mb-6 flex flex-wrap gap-2" aria-label="Secciones del detalle de la conversación">
                     {[
                         ['conversacion', 'Conversación'],
+                        ['informe', 'Informe'],
+                        ['evidencias', 'Evidencias de avance'],
+                        ['prediccion', 'Predicción'],
+                        ['exposicion', 'Exposición gradual'],
                         ['rendimiento', 'Rendimiento'],
                         ['recuperaciones', 'Recuperaciones'],
                         ['evaluacion', 'Evaluación'],
@@ -203,6 +239,113 @@ export default async function ConversationHistoryPage({
                             <div className="transcript-container min-h-[420px] border border-[var(--border-subtle)]">
                                 <Transcript messages={messages} currentMessage="" currentUserMessage="" />
                             </div>
+                        </div>
+                    </section>
+
+                    <section id="informe" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
+                        <SectionTitle
+                            icon={ClipboardList}
+                            title="Informe de la sesión"
+                            description="Tus respuestas en tres dimensiones separadas: dominio del contenido, claridad y estructura, y conducta comunicativa registrada. No hay una nota global, porque una respuesta puede ser correcta y desordenada a la vez."
+                        />
+                        {feedbackResult.success && feedbackResult.data ? (
+                            <SessionReport
+                                sessionId={conversation.id}
+                                report={feedbackResult.data}
+                                judgeModel={feedbackResult.data.judgeModel}
+                                promptVersion={feedbackResult.data.promptVersion}
+                            />
+                        ) : (
+                            <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                                {feedbackResult.error ?? 'No se pudo cargar el informe.'}
+                            </p>
+                        )}
+                    </section>
+
+                    <section id="evidencias" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
+                        <SectionTitle
+                            icon={TrendingUp}
+                            title="Evidencias de avance"
+                            description="Lo que lograste en esta sesión, con el número que lo respalda. Las mejoras se comparan contra tu sesión anterior con este documento y solo aparecen cuando la misma medición existe en ambas; si algo empeoró, también se dice con su dato."
+                        />
+                        {evidenceResult.success && evidenceResult.data ? (
+                            <ProgressEvidence data={evidenceResult.data} />
+                        ) : (
+                            <p className="rounded-xl border border-[var(--border-subtle)] bg-[#f9fafb] p-4 text-sm text-[#3d485e]">
+                                {evidenceResult.error ?? 'No se pudieron cargar las evidencias.'}
+                            </p>
+                        )}
+                    </section>
+
+                    <section id="prediccion" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
+                        <SectionTitle
+                            icon={Scale}
+                            title="Predicción y resultado"
+                            description="Lo que escribiste antes de empezar, junto a lo que quedó registrado en la sesión. Las frases de la derecha se calculan de los turnos y de los niveles del informe; no las redacta un modelo, y ninguna califica tu predicción."
+                        />
+                        {contrastResult.success && contrastResult.data ? (
+                            <PredictionContrast contrast={contrastResult.data} />
+                        ) : (
+                            <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                                {contrastResult.error ?? 'No se pudo cargar el contraste.'}
+                            </p>
+                        )}
+                    </section>
+
+                    <section id="exposicion" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
+                        <SectionTitle
+                            icon={Gauge}
+                            title="Exposición gradual"
+                            description="Nivel de exigencia con el que corrió el simulacro, quién lo eligió y las dos autoevaluaciones de 0 a 10 del estudiante. Los indicadores de abajo son conductas observables registradas en la conversación, no una medición psicológica."
+                        />
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <Stat
+                                label="Nivel de exigencia"
+                                value={`${sessionLevel.id}. ${sessionLevel.name}`}
+                                hint={sessionLevel.tagline}
+                            />
+                            <Stat
+                                label="Quién eligió el nivel"
+                                value={conversation.levelSource === 'manual' ? 'El estudiante' : 'Regla de adaptación'}
+                                hint={
+                                    conversation.levelSource === 'manual'
+                                        ? 'Sobrescribió la sugerencia del sistema'
+                                        : 'El estudiante mantuvo la sugerencia'
+                                }
+                            />
+                            <Stat
+                                label="Autoevaluación previa"
+                                value={formatSelfReport(conversation.preSessionAnxiety)}
+                                hint="Nerviosismo declarado antes de iniciar"
+                            />
+                            <Stat
+                                label="Autoevaluación posterior"
+                                value={formatSelfReport(conversation.postSessionAnxiety)}
+                                hint="Nerviosismo declarado al terminar"
+                            />
+                        </div>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <Stat
+                                label="Silencios largos"
+                                value={numberFormatter.format(sessionSignals.longSilenceCount)}
+                                hint={`Respuestas iniciadas ${LONG_SILENCE_MS / 1000} s o más después de la pregunta`}
+                            />
+                            <Stat
+                                label="Respuestas incompletas"
+                                value={numberFormatter.format(sessionSignals.incompleteAnswerCount)}
+                                hint={`Turnos del estudiante con menos de ${INCOMPLETE_ANSWER_MAX_WORDS} palabras`}
+                            />
+                            <Stat
+                                label="Pedidos de reformulación"
+                                value={numberFormatter.format(sessionSignals.rephraseRequestCount)}
+                                hint="Turnos donde el estudiante pidió repetir la pregunta"
+                            />
+                            <Stat
+                                label="Turnos del estudiante"
+                                value={numberFormatter.format(sessionSignals.studentTurnCount)}
+                                hint="Base sobre la que se calculan los indicadores"
+                            />
                         </div>
                     </section>
 

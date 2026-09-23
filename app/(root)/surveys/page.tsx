@@ -3,6 +3,7 @@ import { Check, Circle, Clock3, LockKeyhole, Minus, Timer } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { getSurveyProgress, type SurveyStageStatus } from '@/lib/actions/survey.actions';
+import { guardParticipantPage } from '@/lib/study/access';
 import { formatDateTime } from '@/lib/metrics/format';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +18,8 @@ const statusConfig: Record<SurveyStageStatus, { label: string; icon: typeof Circ
 };
 
 export default async function SurveysPage() {
+    await guardParticipantPage();
+
     const result = await getSurveyProgress();
     if (!result.success || !result.data) {
         return (

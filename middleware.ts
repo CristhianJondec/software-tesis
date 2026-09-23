@@ -13,6 +13,22 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
 }
 
+/**
+ * Sign-in check only. The study-group gate does NOT live here: the edge
+ * middleware can see the session cookie but not the database, and the group is
+ * read from the database on purpose so a stale cookie can never widen access.
+ * Each page and each server action carries its own guard (`lib/study/access`).
+ */
 export const config = {
-    matcher: ['/books/:path*', '/history/:path*', '/surveys/:path*', '/admin/:path*'],
+    matcher: [
+        '/books/:path*',
+        '/history/:path*',
+        '/surveys/:path*',
+        '/admin/:path*',
+        '/materiales/:path*',
+        '/preparacion/:path*',
+        '/progreso/:path*',
+        '/metrics/:path*',
+        '/sin-asignar',
+    ],
 };

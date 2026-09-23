@@ -1,9 +1,13 @@
 import { Check, Circle, Clock3, LockKeyhole, Minus, ShieldCheck, UsersRound } from 'lucide-react';
 
 import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
+import MaterialsManager from '@/components/admin/MaterialsManager';
+import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
 import { checkAdminAccess } from '@/lib/admin/access';
+import { listStudyMaterialsForAdmin } from '@/lib/actions/material.actions';
 import { getAdminSurveyOverview, type SurveyStageStatus } from '@/lib/actions/survey.actions';
 import { formatDateTime } from '@/lib/metrics/format';
+import { normalizeStudyGroup } from '@/lib/study/groups';
 import { SURVEY_INSTRUMENTS } from '@/lib/surveys/catalog';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +39,10 @@ export default async function AdminPage() {
         );
     }
 
-    const result = await getAdminSurveyOverview();
+    const [result, materialsResult] = await Promise.all([
+        getAdminSurveyOverview(),
+        listStudyMaterialsForAdmin(),
+    ]);
     if (!result.success || !result.data) {
         return (
             <main className="wrapper container">
@@ -46,6 +53,8 @@ export default async function AdminPage() {
     }
 
     const users = result.data;
+    const materials = materialsResult.success ? materialsResult.data ?? [] : [];
+    const unassignedCount = users.filter((user) => normalizeStudyGroup(user.studyGroup) === null).length;
     const completedUsers = users.filter((user) =>
         user.stages.filter((stage) => stage.status !== 'not_applicable').every((stage) => stage.status === 'completed'),
     ).length;
@@ -59,6 +68,11 @@ export default async function AdminPage() {
                     </p>
                     <h1 className="page-title-xl">Usuarios y encuestas</h1>
                     <p className="subtitle mt-3">Registro completo de participantes, avance, respuestas crudas y puntajes calculados.</p>
+                    <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)]">
+                        El grupo se asigna aquí y decide qué ve cada participante: el <strong>experimental</strong>
+                        {' '}accede al agente de voz y a todas las vistas; el <strong>control</strong> solo a encuestas
+                        y materiales. Una cuenta <strong>sin asignar</strong> no puede entrar a ninguna de las dos.
+                    </p>
                 </div>
                 <ExportSurveyCsvButton />
             </header>
@@ -80,6 +94,40 @@ export default async function AdminPage() {
                 </div>
             </section>
 
+            <section className="mb-8 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Grupo experimental</p>
+                    <p className="mt-2 font-serif text-3xl font-bold">
+                        {users.filter((user) => normalizeStudyGroup(user.studyGroup) === 'experimental').length}
+                    </p>
+                </div>
+                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Grupo control</p>
+                    <p className="mt-2 font-serif text-3xl font-bold">
+                        {users.filter((user) => normalizeStudyGroup(user.studyGroup) === 'control').length}
+                    </p>
+                </div>
+                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Sin asignar (sin acceso)</p>
+                    <p className="mt-2 font-serif text-3xl font-bold">{unassignedCount}</p>
+                </div>
+            </section>
+
+            <section className="mb-10">
+                <div className="mb-4">
+                    <h2 className="font-serif text-2xl font-bold">Materiales compartidos</h2>
+                    <p className="subtitle mt-2 max-w-3xl">
+                        Documentos PDF que acompañan a la guía escrita en la vista <strong>Materiales</strong>. Los ven
+                        los dos grupos: es el material de preparación del grupo control y material de apoyo del
+                        experimental.
+                    </p>
+                </div>
+                {!materialsResult.success && (
+                    <p className="mb-3 text-sm text-red-700">{materialsResult.error}</p>
+                )}
+                <MaterialsManager materials={materials} />
+            </section>
+
             {users.length === 0 ? (
                 <section className="rounded-2xl border border-dashed border-black/20 bg-white p-12 text-center">
                     <UsersRound className="mx-auto mb-4 size-10 text-[#663820]" />
@@ -96,7 +144,7 @@ export default async function AdminPage() {
                                 <thead className="bg-[#fff6e5]">
                                     <tr>
                                         <th className="px-4 py-3">Participante</th>
-                                        <th className="px-4 py-3">Grupo</th>
+                                        <th className="w-40 px-4 py-3">Grupo</th>
                                         <th className="px-4 py-3 text-center">AE T1</th>
                                         <th className="px-4 py-3 text-center">AE T2</th>
                                         <th className="px-4 py-3 text-center">Δ AE</th>
@@ -114,7 +162,13 @@ export default async function AdminPage() {
                                                 <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
                                                 <p className="max-w-56 truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
                                             </td>
-                                            <td className="px-4 py-3 capitalize">{user.studyGroup ?? 'Sin asignar'}</td>
+                                            <td className="px-4 py-3">
+                                                <StudyGroupSelect
+                                                    userId={user.id}
+                                                    value={normalizeStudyGroup(user.studyGroup)}
+                                                    participantLabel={user.participantCode ?? user.name}
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 text-center">{score(user.scores.aeT1)}</td>
                                             <td className="px-4 py-3 text-center">{score(user.scores.aeT2)}</td>
                                             <td className="px-4 py-3 text-center font-semibold">{score(user.scores.aeDelta)}</td>

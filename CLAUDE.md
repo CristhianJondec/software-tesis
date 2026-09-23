@@ -35,18 +35,36 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 |---|---|
 | Pipeline RAG (ingesta, guardado, búsqueda) | `lib/actions/book.actions.ts` |
 | Embeddings (Gemini) | `lib/embeddings.ts` |
-| Parseo de PDF y segmentación | `lib/utils.ts` (`parsePDFFile`, `splitIntoSegments`) |
+| Parseo de PDF | `lib/utils.ts` (`parsePDFFile`) |
+| Segmentación (500 palabras, solape 50) | `lib/segmentation.ts` (`splitIntoSegments`) |
 | Webhook que Vapi llama para recuperar contexto | `app/api/vapi/search-book/route.ts` |
 | Ciclo de vida de la llamada por voz | `hooks/useVapi.ts` |
 | UI de la sesión de voz | `components/VapiControls.tsx`, `components/Transcript.tsx` |
 | Registro de sesiones | `lib/actions/session.actions.ts` |
 | Esquema de base de datos | `database/schema/*.ts` |
 | Config de voces y del assistant | `lib/constants.ts` |
+| System prompt del docente evaluador | `lib/agent-prompt.ts` |
+| Niveles de exposición gradual y regla de adaptación | `lib/difficulty/` (`levels.ts`, `signals.ts`, `adaptation.ts`) |
+| Informe post-sesión en 3 dimensiones (rúbrica, juez con cita, hechos) | `lib/feedback/` (`rubric.ts`, `evaluate.ts`, `observations.ts`, `cases.ts`, `report.ts`) |
+| Pantallas previa y de cierre de la sesión (escala 0–10) | `components/SessionSetup.tsx`, `components/PostSessionSurvey.tsx` |
+| Registro de predicciones y contraste con la evidencia de la sesión | `lib/prediction/` (`questions.ts`, `contrast.ts`) |
+| Mapa de preparación: taxonomía, clasificador, cobertura, 4 estados y sesión enfocada | `lib/preparation/` (`topics.ts`, `classify.ts`, `coverage.ts`, `compute.ts`, `status.ts`, `map.ts`, `focus.ts`) |
+| Vista del mapa de preparación | `app/(root)/preparacion/page.tsx`, `components/PreparationMap.tsx` |
+| Evidencias de avance entre sesiones y cierre hablado por el agente | `lib/progress/` (`summary.ts`, `evidence.ts`, `series.ts`, `closing.ts`) |
+| Vista de progreso longitudinal | `app/(root)/progreso/page.tsx`, `components/ProgressCharts.tsx`, `components/ProgressEvidence.tsx` |
+| Roles del estudio (experimental / control) y control de acceso | `lib/study/` (`groups.ts`, `access.ts`) |
+| Vista de materiales del grupo control | `app/(root)/materiales/page.tsx`, `lib/materials/guide.ts` |
+| Asignación de grupo y PDFs compartidos (admin) | `lib/actions/study.actions.ts`, `lib/actions/material.actions.ts`, `components/admin/` |
 
 ## Cómo funciona hoy el flujo de voz
 
-1. `useVapi.start()` valida límites, crea un registro en `voice_sessions` y llama a
-   `vapi.start(ASSISTANT_ID, { variableValues: { title, author, bookId } })`.
+0. Antes de conectar, `SessionSetup` pide la autoevaluación 0–10 y muestra el nivel de
+   exigencia sugerido por `lib/difficulty/adaptation.ts` (función pura, no un LLM). El
+   estudiante puede sobrescribirlo.
+1. `useVapi.start()` valida límites, crea un registro en `voice_sessions` con el nivel y la
+   autoevaluación, y llama a `vapi.start(ASSISTANT_ID, assistantOverrides)`, enviando desde
+   código el system prompt (`lib/agent-prompt.ts` + las directivas del nivel), el modelo, el
+   `firstMessage` del nivel, la voz y `variableValues`.
 2. Vapi maneja STT, LLM y TTS. Cuando el LLM decide recuperar contexto, llama al tool
    `searchBook` → `POST /api/vapi/search-book` con `bookId` y `query`.
 3. La ruta ejecuta `searchBookSegments()`: embebe la consulta y busca por distancia coseno
@@ -54,8 +72,10 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 4. Los eventos de Vapi (`speech-start`, `speech-end`, `message`) actualizan el estado y la
    transcripción en vivo en `useVapi.ts`.
 
-**El comportamiento del agente (prompt, modelo, tools) está en el dashboard de Vapi**, no en
-el repo. Solo existe `ASSISTANT_ID` en `.env`. La referencia versionada vive en
+**El system prompt y el modelo del agente viven en el repo** y se envían en cada llamada como
+`assistantOverrides` (`lib/agent-prompt.ts` + `EVALUATOR_MODEL` en `lib/constants.ts`). Lo que
+sigue en el dashboard de Vapi es el **tool `searchBook`** (con su server URL) y el
+**transcriber**; el `ASSISTANT_ID` está en `.env`. La documentación de todo esto vive en
 `docs/agente/`.
 
 ## Lo que exige la investigación (no negociable)
@@ -88,12 +108,20 @@ micrófono y parlantes.
 
 ## Decisiones ya tomadas (no las vuelvas a plantear)
 
-1. **El assistant de Vapi se configura a mano en el dashboard.** El repo guarda el prompt y
-   la config como referencia auditable en `docs/agente/`, pero no se crea por API.
+1. **El system prompt y el modelo del agente se aplican desde código**, como
+   `assistantOverrides` en cada `vapi.start()`. La fuente de verdad es `lib/agent-prompt.ts`,
+   no el dashboard: el campo *System Prompt* del dashboard queda ignorado en cada llamada.
+   Esto elimina la limitación de reproducibilidad que antes había que declarar en la tesis.
+   El assistant sigue existiendo en el dashboard porque de ahí salen el tool `searchBook`
+   (con su server URL) y el transcriber, que no se envían por código.
 2. **La base de datos está vacía**, sin usuarios ni investigaciones reales. Las migraciones y los
    cambios de segmentación son libres: no hace falta backfill ni conservar datos.
 3. **Todas las métricas, incluido RAGAs, se implementan en TypeScript** dentro del repo. No
    se agrega Python. (Ver la nota de honestidad metodológica en `docs/04`.)
+4. **El grupo control es pasivo**: solo `/surveys` y `/materiales`, sin agente de voz. El
+   experimental accede a todo. Una cuenta con `study_group = NULL` no accede a nada y
+   espera en `/sin-asignar`; solo el admin asigna el grupo, desde `/admin`. La regla vive
+   en `lib/study/` y en ningún otro sitio. (Ver `docs/propuestas/07`.)
 
 ## Convenciones
 

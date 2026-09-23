@@ -8,9 +8,19 @@ import { useSession } from '@/lib/auth-client';
 
 import {
     ASSISTANT_ID,
+    EVALUATOR_MODEL,
     MAX_SESSION_DURATION_MINUTES,
     VAPI_FALLBACK_VOICE,
 } from '@/lib/constants';
+import { buildEvaluatorSystemPrompt } from '@/lib/agent-prompt';
+import {
+    DEFAULT_DIFFICULTY_LEVEL,
+    getDifficultyLevel,
+    type DifficultyLevelId,
+} from '@/lib/difficulty/levels';
+import { buildFocusDirectives } from '@/lib/preparation/focus';
+import type { PreparationTopicId } from '@/lib/preparation/topics';
+import type { PredictionAnswers } from '@/lib/prediction/questions';
 import { IBook, Messages } from '@/types';
 import {
     startVoiceSession,
@@ -18,6 +28,18 @@ import {
     linkVapiCall,
     saveSessionTurn,
 } from '@/lib/actions/session.actions';
+import { recordSessionClosing } from '@/lib/actions/progress.actions';
+
+export interface StartSessionOptions {
+    /** Level confirmed on the pre-session screen. The server has the last word. */
+    difficultyLevel?: DifficultyLevelId;
+    /** Self-report 0-10 taken right before starting. Null when skipped. */
+    preSessionAnxiety?: number | null;
+    /** Topics of the preparation map this session is limited to, if any. */
+    focusTopics?: PreparationTopicId[];
+    /** The three written predictions taken before connecting, if answered. */
+    prediction?: PredictionAnswers;
+}
 
 export function useLatestRef<T>(value: T) {
     const ref = useRef(value);
@@ -32,6 +54,23 @@ export function useLatestRef<T>(value: T) {
 const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
 const TIMER_INTERVAL_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
+
+/**
+ * How long the evidence-based closing may take to come back from the server
+ * before the call is hung up without it (docs/propuestas/05).
+ *
+ * The student pressed "finalizar": they are owed a hang-up, not a spinner. A
+ * closing that does not arrive in time is simply not spoken, and the same
+ * evidence still waits for them on the session page.
+ */
+const CLOSING_FETCH_TIMEOUT_MS = 6_000;
+
+/**
+ * Ceiling for the spoken closing itself. `vapi.say(..., true)` ends the call
+ * once the text has been spoken; this is the net for the case where that
+ * message never lands, so a session can never be left hanging on the line.
+ */
+const CLOSING_SPEECH_TIMEOUT_MS = 45_000;
 
 let vapi: InstanceType<typeof Vapi>;
 function getVapi() {
@@ -57,11 +96,18 @@ export function useVapi(book: IBook) {
     const [duration, setDuration] = useState(0);
     const [limitError, setLimitError] = useState<string | null>(null);
     const [isMuted, setIsMuted] = useState(false);
+    // Level the live session is running at, so the UI can name it while it runs.
+    const [activeLevel, setActiveLevel] = useState<DifficultyLevelId>(DEFAULT_DIFFICULTY_LEVEL);
+    // Session that just closed, still awaiting its post-session self-report.
+    const [finishedSessionId, setFinishedSessionId] = useState<string | null>(null);
+    // The agent is reading the evidence of the session before hanging up.
+    const [isClosing, setIsClosing] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
     const isStoppingRef = useRef(false);
+    const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // --- Turn instrumentation (refs only: these must not re-render the UI) ---
     const turnIndexRef = useRef(0);
@@ -70,6 +116,12 @@ export function useVapi(book: IBook) {
     // Set on the student's final transcript; consumed by the agent's next speech-start.
     const userFinalAtRef = useRef<number | null>(null);
     const pendingStudentLatencyRef = useRef<number | null>(null);
+    // Longest gap between two consecutive partial transcripts of the student's
+    // current turn, and when the last partial arrived. Feeds dimension 3 of the
+    // post-session report (docs/propuestas/02). It measures silence as the
+    // transcriber saw it, not acoustic silence — see database/schema/sessionTurns.ts.
+    const lastUserPartialAtRef = useRef<number | null>(null);
+    const maxUserPauseRef = useRef<number>(0);
     const pendingSystemLatencyRef = useRef<number | null>(null);
     const userTurnStartedAtRef = useRef<number | null>(null);
     const agentTurnStartedAtRef = useRef<number | null>(null);
@@ -80,6 +132,8 @@ export function useVapi(book: IBook) {
         agentSpeechEndAtRef.current = null;
         userFinalAtRef.current = null;
         pendingStudentLatencyRef.current = null;
+        lastUserPartialAtRef.current = null;
+        maxUserPauseRef.current = 0;
         pendingSystemLatencyRef.current = null;
         userTurnStartedAtRef.current = null;
         agentTurnStartedAtRef.current = null;
@@ -100,6 +154,9 @@ export function useVapi(book: IBook) {
 
             const studentLatencyMs = role === 'user' ? pendingStudentLatencyRef.current : null;
             const systemLatencyMs = role === 'assistant' ? pendingSystemLatencyRef.current : null;
+            // A turn with a single partial has no measurable gap, which is not
+            // the same as a gap of zero: it is reported as unmeasured.
+            const maxPauseMs = role === 'user' && maxUserPauseRef.current > 0 ? maxUserPauseRef.current : null;
             if (role === 'user') pendingStudentLatencyRef.current = null;
             if (role === 'assistant') pendingSystemLatencyRef.current = null;
 
@@ -112,6 +169,7 @@ export function useVapi(book: IBook) {
                 endedAt,
                 studentLatencyMs,
                 systemLatencyMs,
+                maxPauseMs,
             })
                 .then((res) => {
                     if (!res.success) console.error('Failed to save session turn:', res.error);
@@ -161,6 +219,11 @@ export function useVapi(book: IBook) {
             'call-end': () => {
                 // Don't reset isStoppingRef here - delayed events may still fire
                 setStatus('idle');
+                setIsClosing(false);
+                if (closingTimeoutRef.current) {
+                    clearTimeout(closingTimeoutRef.current);
+                    closingTimeoutRef.current = null;
+                }
                 setCurrentMessage('');
                 setCurrentUserMessage('');
                 setIsMuted(false);
@@ -173,6 +236,9 @@ export function useVapi(book: IBook) {
 
                 // End session tracking
                 if (sessionIdRef.current) {
+                    // Only a session that produced turns gets a closing self-report:
+                    // asking after a call that never connected would store noise.
+                    if (turnIndexRef.current > 0) setFinishedSessionId(sessionIdRef.current);
                     endVoiceSession(sessionIdRef.current, durationRef.current).catch((err) =>
                         console.error('Failed to end voice session:', err),
                     );
@@ -239,6 +305,12 @@ export function useVapi(book: IBook) {
                         userTurnStartedAtRef.current = now;
                     }
 
+                    if (lastUserPartialAtRef.current !== null) {
+                        const gap = now - lastUserPartialAtRef.current;
+                        if (gap > maxUserPauseRef.current) maxUserPauseRef.current = gap;
+                    }
+                    lastUserPartialAtRef.current = now;
+
                     setCurrentUserMessage(message.transcript);
                     return;
                 }
@@ -264,8 +336,13 @@ export function useVapi(book: IBook) {
 
                         persistTurn(message.role, message.transcript, startedAt, endedAt);
 
-                        if (message.role === 'user') userTurnStartedAtRef.current = null;
-                        else agentTurnStartedAtRef.current = null;
+                        if (message.role === 'user') {
+                            userTurnStartedAtRef.current = null;
+                            lastUserPartialAtRef.current = null;
+                            maxUserPauseRef.current = 0;
+                        } else {
+                            agentTurnStartedAtRef.current = null;
+                        }
                     }
 
                     setMessages((prev) => {
@@ -292,6 +369,7 @@ export function useVapi(book: IBook) {
 
                 // End session tracking on error
                 if (sessionIdRef.current) {
+                    if (turnIndexRef.current > 0) setFinishedSessionId(sessionIdRef.current);
                     endVoiceSession(sessionIdRef.current, durationRef.current).catch((err) =>
                         console.error('Failed to end voice session on error:', err),
                     );
@@ -334,21 +412,28 @@ export function useVapi(book: IBook) {
                 getVapi().off(event as keyof typeof handlers, handler as () => void);
             });
             if (timerRef.current) clearInterval(timerRef.current);
+            if (closingTimeoutRef.current) clearTimeout(closingTimeoutRef.current);
         };
     }, [durationRef, maxDurationRef, persistTurn, resetTurnTracking]);
 
-    const start = useCallback(async () => {
+    const start = useCallback(async (options: StartSessionOptions = {}) => {
         if (!userId) {
             setLimitError('Inicia sesión para comenzar una conversación por voz.');
             return;
         }
 
         setLimitError(null);
+        setFinishedSessionId(null);
         setStatus('connecting');
 
         try {
             // Create the persisted session before connecting to Vapi.
-            const result = await startVoiceSession(book.id);
+            const result = await startVoiceSession(book.id, {
+                difficultyLevel: options.difficultyLevel,
+                preSessionAnxiety: options.preSessionAnxiety ?? null,
+                focusTopics: options.focusTopics,
+                prediction: options.prediction,
+            });
 
             if (!result.success) {
                 setLimitError(result.error || 'No se pudo iniciar la sesión. Inténtalo nuevamente.');
@@ -357,15 +442,51 @@ export function useVapi(book: IBook) {
             }
 
             sessionIdRef.current = result.sessionId || null;
-            // Opening of the thesis defense. Sent from here — not from the Vapi dashboard —
-            // because it interpolates the actual thesis title. See docs/agente/.
-            const firstMessage = `Buen día. Soy parte del jurado que evaluará su investigación, "${book.title}". Cuénteme brevemente de qué trata y en qué punto se encuentra; luego iniciaré las preguntas.`;
 
+            // The level the SERVER stored, not the one the screen proposed: the
+            // simulation the student lives has to match the row the thesis reads.
+            const level = getDifficultyLevel(result.difficultyLevel);
+            setActiveLevel(level.id);
+
+            // Opening of the thesis defense. Sent from here — not from the Vapi dashboard —
+            // because it interpolates the actual thesis title and varies by level.
+            // See docs/agente/ and lib/difficulty/levels.ts.
+            const firstMessage = level.buildFirstMessage(book.title);
+
+            const localSessionId = result.sessionId ?? '';
+
+            // Focused session: the topics the SERVER accepted, never the ones the
+            // screen proposed, so the prompt and the stored row cannot disagree.
+            const focusDirectives = buildFocusDirectives(result.focusTopics ?? []);
 
             // Investfied currently exposes one voice only. The old ElevenLabs
             // choices remain documented in constants.ts and VoiceSelector.tsx for
             // the future multi-voice phase, but are deliberately not read here.
             const assistantOverrides = {
+                // The agent's behaviour is versioned in the repo, not in the Vapi
+                // dashboard. Vapi merges this override onto the assistant, so the
+                // searchBook tool attached there survives; if a test session ever
+                // shows the agent asking generic questions without hitting the
+                // webhook, the tool was dropped and must be sent here as toolIds.
+                model: {
+                    ...EVALUATOR_MODEL,
+                    // The level tunes decoding: level 1 needs a predictable,
+                    // repetitive examiner; level 4 needs varied challenges.
+                    temperature: level.temperature,
+                    messages: [
+                        {
+                            role: 'system' as const,
+                            content: buildEvaluatorSystemPrompt({
+                                title: book.title,
+                                author: book.author,
+                                bookId: book.id,
+                                sessionId: localSessionId,
+                                levelDirectives: level.promptDirectives,
+                                focusDirectives,
+                            }),
+                        },
+                    ],
+                },
                 voice: {
                     provider: 'vapi' as const,
                     voiceId: VAPI_FALLBACK_VOICE.voiceId,
@@ -377,7 +498,6 @@ export function useVapi(book: IBook) {
                 },
             };
 
-            const localSessionId = result.sessionId ?? '';
             const call = await getVapi().start(ASSISTANT_ID, {
                 firstMessage,
                 variableValues: {
@@ -409,8 +529,56 @@ export function useVapi(book: IBook) {
         }
     }, [book.id, book.title, book.author, userId]);
 
-    const stop = useCallback(() => {
+    /**
+     * Ends the session, letting the agent read the evidence of it first
+     * (docs/propuestas/05).
+     *
+     * The closing sentences are composed on the server by
+     * `lib/progress/closing.ts` and handed to the TTS verbatim through
+     * `vapi.say`, which hangs up once they have been spoken. The LLM is not
+     * asked to summarise anything: that is what makes "el cierre incluye
+     * evidencias, no elogios genéricos" a property of the code instead of a
+     * hope about a sampler.
+     *
+     * Every failure path ends the call anyway. A student who pressed "finalizar"
+     * must never be kept on the line by a closing that could not be built.
+     */
+    const stop = useCallback(async () => {
+        if (isStoppingRef.current) return;
         isStoppingRef.current = true;
+
+        const sessionId = sessionIdRef.current;
+        if (!sessionId) {
+            getVapi().stop();
+            return;
+        }
+
+        setIsClosing(true);
+
+        try {
+            const closing = await Promise.race([
+                recordSessionClosing(sessionId),
+                new Promise<null>((resolve) =>
+                    setTimeout(() => resolve(null), CLOSING_FETCH_TIMEOUT_MS),
+                ),
+            ]);
+
+            const spokenText = closing?.success ? closing.data?.spokenText : null;
+
+            if (spokenText) {
+                // `true` = end the call once the text has been spoken.
+                getVapi().say(spokenText, true);
+                closingTimeoutRef.current = setTimeout(() => {
+                    closingTimeoutRef.current = null;
+                    getVapi().stop();
+                }, CLOSING_SPEECH_TIMEOUT_MS);
+                return;
+            }
+        } catch (err) {
+            console.error('Failed to build the spoken closing:', err);
+        }
+
+        setIsClosing(false);
         getVapi().stop();
     }, []);
 
@@ -422,6 +590,10 @@ export function useVapi(book: IBook) {
 
     const clearError = useCallback(() => {
         setLimitError(null);
+    }, []);
+
+    const clearFinishedSession = useCallback(() => {
+        setFinishedSessionId(null);
     }, []);
 
     const isActive =
@@ -441,9 +613,13 @@ export function useVapi(book: IBook) {
         stop,
         isMuted,
         toggleMuted,
+        isClosing,
         limitError,
         maxDurationSeconds,
         clearError,
+        activeLevel,
+        finishedSessionId,
+        clearFinishedSession,
     };
 }
 

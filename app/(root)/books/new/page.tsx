@@ -2,8 +2,11 @@ import UploadForm from "@/components/UploadForm";
 import LimitReachedModal from "@/components/LimitReachedModal";
 import { getUserBookCount } from "@/lib/actions/book.actions";
 import { MAX_BOOKS_PER_USER } from "@/lib/constants";
+import { guardInterventionPage } from "@/lib/study/access";
 
 const Page = async () => {
+    await guardInterventionPage();
+
     const bookCount = await getUserBookCount();
     const limitReached = (bookCount.data ?? 0) >= MAX_BOOKS_PER_USER;
 

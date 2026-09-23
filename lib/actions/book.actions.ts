@@ -9,6 +9,8 @@ import { books, bookSegments } from '@/database/schema';
 import { MAX_BOOKS_PER_USER, RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
 import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
+import { requireInterventionAccess } from '@/lib/study/access';
+import { computeBookTopicCoverage } from '@/lib/preparation/compute';
 import { deleteObjects } from '@/lib/r2';
 import { generateSlug } from '@/lib/utils';
 import type { CreateBook, TextSegment } from '@/types';
@@ -80,6 +82,7 @@ export const getUserBookCount = async () => {
 
 export const createBook = async (data: CreateBook) => {
     try {
+        await requireInterventionAccess();
         const user = await requireUser();
         const userId = user.id;
 
@@ -183,6 +186,7 @@ export const deleteBook = async (bookId: string) => {
 
 export const saveBookSegments = async (bookId: string, segments: TextSegment[]) => {
     try {
+        await requireInterventionAccess();
         const user = await requireUser();
         const userId = user.id;
 
@@ -218,6 +222,16 @@ export const saveBookSegments = async (bookId: string, segments: TextSegment[]) 
                 .set({ totalSegments: segments.length, updatedAt: new Date() })
                 .where(eq(books.id, bookId));
         });
+
+        // Map the document against the defense taxonomy right after ingestion, so
+        // the preparation map (docs/propuestas/03) can report gaps before the
+        // student has practised even once. Non-fatal: the document is already
+        // ingested and usable, and the map exposes a button to retry.
+        try {
+            await computeBookTopicCoverage(bookId);
+        } catch (coverageError) {
+            console.error('Segments saved, but topic coverage could not be computed', coverageError);
+        }
 
         return { success: true, data: { segmentsCreated: segments.length } };
     } catch (e) {

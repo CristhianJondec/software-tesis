@@ -16,6 +16,19 @@ export const sessionTurns = pgTable('session_turns', {
     studentLatencyMs: integer('student_latency_ms'),
     // Time between the end of the student turn and the start of the agent reply.
     systemLatencyMs: integer('system_latency_ms'),
+    // Longest gap between two consecutive partial transcripts of this turn.
+    // Only on student turns. It is silence AS THE TRANSCRIBER SAW IT, not
+    // acoustic silence: the STT emits partials in batches, so short gaps are
+    // cadence rather than pausing. Feeds dimension 3 of the post-session report
+    // (docs/propuestas/02); the threshold that makes a gap reportable lives in
+    // lib/feedback/observations.ts.
+    maxPauseMs: integer('max_pause_ms'),
+    // Topic of the defense taxonomy this turn belongs to, on AGENT turns only
+    // (docs/propuestas/03). Written by the lexical classifier in
+    // lib/preparation/classify.ts when the turn is persisted, so the preparation
+    // map can say which topics were actually practised. NULL means no cue
+    // matched -- the question is left untagged rather than filed under a guess.
+    topic: text('topic'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [
     index('session_turns_session_turn_idx').on(t.sessionId, t.turnIndex),

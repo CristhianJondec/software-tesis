@@ -5,6 +5,7 @@ import RagasControls from '@/components/metrics/RagasControls';
 import { EmptyState, Section, StatCard, TableWrapper } from '@/components/metrics/StatCard';
 import { getMetricsOverview } from '@/lib/actions/metrics.actions';
 import { checkMetricsAccess } from '@/lib/metrics/access';
+import { getDifficultyLevel } from '@/lib/difficulty/levels';
 import {
     formatDeltaMs,
     formatMs,
@@ -23,6 +24,13 @@ export const dynamic = 'force-dynamic';
 
 const th = 'px-4 py-3 font-semibold text-[var(--text-secondary)] whitespace-nowrap';
 const td = 'px-4 py-3 border-t border-black/5 whitespace-nowrap';
+
+/** A self-report that was never given is blank, never 0. */
+const formatSelfReport = (value: number | null) => (value === null ? '—' : `${value} / 10`);
+
+/** A rubric mean nobody could measure is blank, never 0. */
+const formatLevel = (value: number | null) =>
+    value === null ? '—' : value.toFixed(2).replace('.', ',');
 
 const MetricsPage = async () => {
     const access = await checkMetricsAccess();
@@ -49,6 +57,13 @@ const MetricsPage = async () => {
 
     const report = result.data;
     const hasTurns = report.corpus.turns > 0;
+    // Sessions where at least one student answer carries a verdict. A session
+    // with none is not a row of zeros, it is a session nobody evaluated yet.
+    const sessionsWithFeedback = report.sessions.filter(
+        (session) =>
+            session.feedbackContent.n + session.feedbackContent.inconclusive > 0 ||
+            session.feedbackClarity.n + session.feedbackClarity.inconclusive > 0,
+    );
 
     return (
         <main className="wrapper container">
@@ -306,6 +321,106 @@ const MetricsPage = async () => {
                 <div className="mt-5">
                     <RagasControls pending={report.ragasCoverage.pending} />
                 </div>
+            </Section>
+
+            {/* ========= Three-dimension feedback ========= */}
+            <Section
+                title="Retroalimentación en tres dimensiones"
+                description="Promedios por sesión de las dos dimensiones calificadas de las respuestas del ESTUDIANTE: dominio del contenido y claridad. No se fusionan en una nota, y no aportan a PR: PR mide la precisión de las respuestas del AGENTE y se calcula aparte, con revisión humana. La tercera dimensión (conducta comunicativa) no lleva puntaje y se reporta como los tiempos de latencia de esta misma tabla."
+            >
+                {sessionsWithFeedback.length === 0 ? (
+                    <EmptyState>
+                        Ninguna sesión tiene respuestas evaluadas todavía. El informe se genera desde el
+                        detalle de cada conversación.
+                    </EmptyState>
+                ) : (
+                    <TableWrapper>
+                        <thead>
+                            <tr className="bg-[var(--accent-light)]">
+                                <th className={th}>Participante</th>
+                                <th className={th}>Sesión</th>
+                                <th className={th}>Contenido (0-3)</th>
+                                <th className={th}>n</th>
+                                <th className={th}>No concl.</th>
+                                <th className={th}>Claridad (0-3)</th>
+                                <th className={th}>n</th>
+                                <th className={th}>No concl.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sessionsWithFeedback.map((session) => (
+                                <tr key={session.sessionId}>
+                                    <td className={`${td} font-medium`}>
+                                        {session.participantCode ?? 'sin código'}
+                                    </td>
+                                    <td className={td}>{session.sessionNumber}</td>
+                                    <td className={td}>{formatLevel(session.feedbackContent.meanLevel)}</td>
+                                    <td className={td}>{session.feedbackContent.n}</td>
+                                    <td className={td}>{session.feedbackContent.inconclusive}</td>
+                                    <td className={td}>{formatLevel(session.feedbackClarity.meanLevel)}</td>
+                                    <td className={td}>{session.feedbackClarity.n}</td>
+                                    <td className={td}>{session.feedbackClarity.inconclusive}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </TableWrapper>
+                )}
+            </Section>
+
+            {/* ========= Graded exposure ========= */}
+            <Section
+                title="Exposición gradual adaptativa"
+                description="Nivel de exigencia con el que corrió cada simulacro y las dos autoevaluaciones de 0 a 10 del estudiante. El nivel lo sugiere una regla determinista sobre la sesión anterior; el estudiante puede sobrescribirla, y la columna Origen distingue ambos casos. Una autoevaluación sin responder se muestra vacía, nunca como cero."
+            >
+                {report.sessions.length === 0 ? (
+                    <EmptyState>Sin sesiones registradas todavía.</EmptyState>
+                ) : (
+                    <TableWrapper>
+                        <thead>
+                            <tr className="bg-[var(--accent-light)]">
+                                <th className={th}>Participante</th>
+                                <th className={th}>Grupo</th>
+                                <th className={th}>Sesión</th>
+                                <th className={th}>Nivel</th>
+                                <th className={th}>Origen</th>
+                                <th className={th}>Autoeval. previa</th>
+                                <th className={th}>Autoeval. posterior</th>
+                                <th className={th}>Δ</th>
+                                <th className={th}>Latencia media</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {report.sessions.map((session) => {
+                                const level = getDifficultyLevel(session.difficultyLevel);
+                                const delta =
+                                    session.preSessionAnxiety !== null && session.postSessionAnxiety !== null
+                                        ? session.postSessionAnxiety - session.preSessionAnxiety
+                                        : null;
+                                return (
+                                    <tr key={session.sessionId}>
+                                        <td className={`${td} font-medium`}>
+                                            {session.participantCode ?? 'sin código'}
+                                        </td>
+                                        <td className={td}>{session.studyGroup ?? '—'}</td>
+                                        <td className={td}>{session.sessionNumber}</td>
+                                        <td className={td}>
+                                            {level.id}. {level.name}
+                                        </td>
+                                        <td className={td}>
+                                            {session.levelSource === 'manual' ? 'Estudiante' : 'Regla'}
+                                        </td>
+                                        <td className={td}>{formatSelfReport(session.preSessionAnxiety)}</td>
+                                        <td className={td}>{formatSelfReport(session.postSessionAnxiety)}</td>
+                                        <td className={td}>
+                                            {delta === null ? '—' : delta > 0 ? `+${delta}` : `${delta}`}
+                                        </td>
+                                        <td className={td}>{formatMs(session.studentLatency.meanMs)}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </TableWrapper>
+                )}
             </Section>
 
             {/* ================= Export ================= */}

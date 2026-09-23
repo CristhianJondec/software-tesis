@@ -1,12 +1,14 @@
 # Configuración del assistant de Vapi
 
-> **Limitación de reproducibilidad — declararla en la investigación.**
-> La configuración del agente **se aplica manualmente en el dashboard de Vapi**
-> (https://dashboard.vapi.ai). El repositorio no la crea ni la sincroniza por API: solo
-> guarda `NEXT_PUBLIC_ASSISTANT_ID` en `.env`. Este archivo es la copia versionada y
-> auditable de esa configuración, y existe precisamente para que el jurado no tenga que
-> confiar en una caja negra. Es una limitación real del artefacto y es preferible declararla
-> a que sea descubierta.
+> **Qué se aplica desde código y qué sigue en el dashboard.**
+> El **system prompt y el modelo** del agente se envían desde el repositorio en cada llamada
+> (`assistantOverrides` en `hooks/useVapi.ts`), así que no dependen del dashboard ni de la
+> memoria de quien lo configuró: son código versionado y auditable. Lo que **sí** sigue
+> viviendo en el dashboard de Vapi (https://dashboard.vapi.ai) es el **tool `searchBook`**
+> —porque lleva la server URL del webhook— y el **transcriber**.
+>
+> Esa parte manual es la limitación de reproducibilidad que queda por declarar en la
+> investigación, y es mucho más acotada que antes.
 >
 > **Regla de mantenimiento:** todo cambio en el dashboard se refleja aquí en el mismo
 > commit. Si los dos divergen, la evidencia deja de valer.
@@ -28,14 +30,24 @@ El system prompt completo está en [`prompt-evaluador.md`](prompt-evaluador.md).
 
 ## Model
 
-| Campo | Valor |
-|---|---|
-| Provider | `openai` |
-| Model | `gpt-4o` |
-| Temperature | `0.4` |
-| Max tokens | `250` |
-| System prompt | el de [`prompt-evaluador.md`](prompt-evaluador.md), íntegro |
-| Tools | `searchBook` (ver abajo) |
+| Campo | Valor | Fuente en el repo |
+|---|---|---|
+| Provider | `openai` | `lib/constants.ts` → `EVALUATOR_MODEL` |
+| Model | `gpt-4o` | `lib/constants.ts` → `EVALUATOR_MODEL` |
+| Temperature | según el nivel: `0.3` / `0.4` / `0.5` / `0.6` | `lib/difficulty/levels.ts` → `DIFFICULTY_LEVELS[n].temperature` |
+| Max tokens | `250` | `lib/constants.ts` → `EVALUATOR_MODEL` |
+| System prompt | el de [`prompt-evaluador.md`](prompt-evaluador.md), íntegro | `lib/agent-prompt.ts` |
+| Tools | `searchBook` (ver abajo) | **dashboard** |
+
+Salvo el tool, **esta tabla ya no se configura en el dashboard**: la aplicación envía el
+bloque `model` completo en cada `vapi.start()`. Lo que esté puesto en el dashboard en esos
+campos no llega al agente.
+
+El tool sí sigue en el dashboard, y por eso el override manda solo `model.messages` y los
+parámetros: Vapi fusiona el override sobre el assistant, de modo que `searchBook` sobrevive.
+**Verificación obligatoria en la primera sesión de prueba:** si el agente hace preguntas
+genéricas y no aparece ninguna fila en `turn_retrievals`, el tool se perdió en la fusión y
+hay que enviarlo desde código (`model.toolIds`).
 
 **Justificación de la elección (ítem #13).** La investigación no especifica el LLM, así que se fija
 aquí y se reporta como parte del stack:
@@ -44,9 +56,15 @@ aquí y se reporta como parte del stack:
   prompt depende por completo de que el modelo invoque `searchBook` antes de cada pregunta—,
   buen desempeño en español académico, y latencia baja, que importa porque la latencia del
   LLM entra directamente en la métrica **LP** del capítulo de resultados.
-- `temperature: 0.4` es deliberadamente baja: se busca fidelidad al fragmento recuperado, no
-  creatividad. Un valor alto favorece exactamente lo que el prompt prohíbe (inventar
-  contenido del documento).
+- La **temperatura la fija el nivel de exposición gradual** (doc `propuestas/01`), no
+  `EVALUATOR_MODEL`: `0.3` en Ensayo seguro, `0.4` en Práctica guiada, `0.5` en Simulación
+  realista y `0.6` en Simulación desafiante. El rango completo sigue siendo bajo porque se
+  busca fidelidad al fragmento recuperado, no creatividad: un valor alto favorece exactamente
+  lo que el prompt prohíbe (inventar contenido del documento). Los niveles altos suben apenas
+  porque necesitan variar el ángulo de la repregunta sin dejar de estar anclados. El valor
+  efectivo de cada sesión es reconstruible: `voice_sessions.difficulty_level` guarda el nivel.
+- `EVALUATOR_MODEL.temperature` (`0.4`) queda como valor por defecto del override y coincide
+  con el nivel 2.
 - `maxTokens: 250` fuerza turnos cortos. Es la contención dura del "una pregunta a la vez";
   el prompt lo pide, este límite lo garantiza.
 
@@ -194,7 +212,10 @@ propiedades van en `required` para que el modelo no las omita.
 
 | Cosa | Dónde vive | Por qué |
 |---|---|---|
-| `firstMessage` | `hooks/useVapi.ts` | Interpola el título real de la investigación en cada sesión |
+| System prompt | `lib/agent-prompt.ts` | Fuente de verdad versionada; se envía como override en cada llamada |
+| Modelo y sus parámetros | `lib/constants.ts` (`EVALUATOR_MODEL`) | Se reportan en la investigación; viajan con el override |
+| `firstMessage` | `lib/difficulty/levels.ts` | Depende del nivel; interpola el título real de la investigación |
+| Nivel de exigencia | `lib/difficulty/levels.ts` | Bloque `{{levelDirectives}}` del prompt + temperatura; se guarda en `voice_sessions` |
 | Voz efectiva | `hooks/useVapi.ts` + `lib/constants.ts` | La elige el estudiante por documento |
 | `variableValues` | `hooks/useVapi.ts` | `title`, `author`, `bookId`, `sessionId` |
 | Límite de duración | `hooks/useVapi.ts` (`maxDurationSeconds`) | Depende del plan del usuario |
@@ -203,8 +224,8 @@ propiedades van en `required` para que el modelo no las omita.
 
 ## Checklist de aplicación en el dashboard
 
-- [ ] System prompt pegado íntegro desde `prompt-evaluador.md`
-- [ ] Model provider/model/temperature/maxTokens según la tabla **Model**
+- [ ] ~~System prompt pegado íntegro~~ → ya no aplica: lo envía la aplicación desde `lib/agent-prompt.ts`
+- [ ] ~~Model provider/model/temperature/maxTokens~~ → ya no aplica: los envía `EVALUATOR_MODEL`
 - [ ] Transcriber con `language: "es"`
 - [ ] Voz por defecto y parámetros de ElevenLabs según la tabla **Voice**
 - [ ] Bloque de turn-taking pegado tal cual

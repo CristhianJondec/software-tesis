@@ -1,17 +1,22 @@
 # System prompt — Docente evaluador
 
-> **Este archivo es la fuente de verdad del comportamiento del agente.**
-> El prompt vive en el dashboard de Vapi (decisión registrada en `CLAUDE.md`), no se aplica
-> por API. Si editas el prompt en el dashboard, **actualiza también este archivo** o la
-> evidencia deja de ser auditable.
+> **La fuente de verdad del prompt es `lib/agent-prompt.ts`.**
+> El prompt se aplica **desde código**, como `assistantOverrides.model.messages` en cada
+> `vapi.start()` (decisión registrada en `CLAUDE.md`). El campo *System Prompt* del dashboard
+> de Vapi **queda ignorado**: lo que el agente recibe es siempre el texto del repo.
 >
-> Assistant: el de `NEXT_PUBLIC_ASSISTANT_ID` · Campo: **Model → System Prompt**
+> Este archivo es la copia legible del mismo texto. El bloque de abajo debe coincidir
+> carácter por carácter con `EVALUATOR_SYSTEM_PROMPT_TEMPLATE`; si editas uno, edita el otro
+> en el mismo commit.
+>
 > Configuración completa del assistant: [`vapi-config.md`](vapi-config.md)
 
 ## Variables que inyecta la aplicación
 
-`hooks/useVapi.ts` pasa estas variables en `vapi.start(..., { variableValues })`. Dentro del
-prompt se referencian con dobles llaves:
+Los marcadores `{{...}}` **los sustituye `buildEvaluatorSystemPrompt()` en TypeScript**, antes
+de enviar el prompt. No dependen de la sustitución de variables de Vapi: el prompt llega a la
+plataforma ya resuelto. `hooks/useVapi.ts` sigue enviando además `variableValues` con los
+mismos valores, que es lo que consumen los mensajes configurados en el dashboard.
 
 | Variable | Contenido | Uso en el prompt |
 |---|---|---|
@@ -19,6 +24,24 @@ prompt se referencian con dobles llaves:
 | `{{author}}` | Autor declarado del documento | Contexto |
 | `{{bookId}}` | ID del documento en `books` | **Argumento obligatorio de `searchBook`** |
 | `{{sessionId}}` | ID de la fila en `voice_sessions` | **Argumento obligatorio de `searchBook`** |
+| `{{levelDirectives}}` | Directivas del nivel de exigencia de la sesión (`lib/difficulty/levels.ts`) | Sección **NIVEL DE EXIGENCIA DE ESTA SESIÓN** |
+| `{{focusDirectives}}` | Temas a los que el estudiante limitó la sesión (`lib/preparation/focus.ts`) | Sección **TEMAS A LOS QUE SE LIMITA ESTA SESIÓN** |
+
+`{{levelDirectives}}` es el bloque de exposición gradual (doc `propuestas/01`). Su contenido sale
+de `DIFFICULTY_LEVELS[nivel].promptDirectives` y cambia el tono, el número de preguntas, la
+repregunta, la reformulación y el control del tiempo. Tiene precedencia sobre las reglas
+generales del prompt, **salvo** el anclaje a `searchBook`, el español, la prohibición de inventar
+contenido, una pregunta por turno y la prohibición de comentar el estado emocional del
+estudiante: eso no lo altera ningún nivel. El nivel de cada sesión queda guardado en
+`voice_sessions.difficulty_level`.
+
+`{{focusDirectives}}` es el bloque de sesión enfocada (doc `propuestas/03`). Está **vacío** en una
+sesión normal, de modo que el prompt de una sesión completa es idéntico carácter por carácter al
+que se enviaba antes de que existieran las sesiones enfocadas, y las dos son comparables. Cuando
+tiene contenido, lista los temas que el estudiante eligió en el mapa de preparación y limita las
+preguntas a esos temas. **No toca el anclaje**: el agente sigue obligado a llamar a `searchBook`
+antes de cada pregunta y sigue sin poder preguntar por lo que el documento no contiene. Los temas
+de cada sesión quedan guardados en `voice_sessions.focus_topics`.
 
 `{{bookId}}` y `{{sessionId}}` no son decorativos: sin ellos el retriever no sabe en qué
 documento buscar y las recuperaciones no quedan ligadas a la sesión en `turn_retrievals`
@@ -26,7 +49,7 @@ documento buscar y las recuperaciones no quedan ligadas a la sesión en `turn_re
 
 ---
 
-## Prompt (copiar íntegro al dashboard)
+## Prompt (copia legible de `lib/agent-prompt.ts`)
 
 ```text
 # ROL
@@ -196,6 +219,24 @@ Después continúa evaluando lo que el documento efectivamente contiene.
 
 Si `searchBook` no devuelve nada en ninguna consulta, dilo con claridad: el documento no tiene
 contenido recuperable y la sesión no puede continuar como sustentación.
+
+# NIVEL DE EXIGENCIA DE ESTA SESIÓN
+
+Esta sesión es un simulacro de exposición graduada: el estudiante eligió, o el sistema le
+sugirió, un nivel de exigencia. Las instrucciones que siguen son las de ESE nivel y tienen
+PRECEDENCIA sobre cualquier regla anterior de tono, de repregunta, de reformulación y de
+control del tiempo.
+
+Lo que el nivel NO puede alterar, pase lo que pase: la regla de anclaje de `searchBook`, el
+idioma español, la prohibición de inventar contenido del documento, el límite de una pregunta
+por turno y la prohibición de comentar el estado emocional del estudiante.
+
+Nunca menciones el nivel, ni digas que hay niveles, ni compares esta sesión con otra. Para el
+estudiante esto es una sustentación, no una configuración.
+
+{{levelDirectives}}
+
+{{focusDirectives}}
 
 # RECORDATORIOS CRÍTICOS
 

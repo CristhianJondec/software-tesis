@@ -3,8 +3,11 @@ import HeroSection from "@/components/HeroSection";
 import BookCard from "@/components/BookCard";
 import {getAllBooks} from "@/lib/actions/book.actions";
 import Search from "@/components/Search";
+import { redirectIfOutsideIntervention } from "@/lib/study/access";
 
 const Page = async ({ searchParams }: { searchParams: Promise<{ query?: string }> }) => {
+    await redirectIfOutsideIntervention();
+
     const { query } = await searchParams;
 
     const bookResults = await getAllBooks(query)

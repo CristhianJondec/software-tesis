@@ -19,6 +19,17 @@ export const MAX_BOOKS_PER_USER = 4;
 // Pre-configured VAPI assistant ID (hardcoded for this app)
 export const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 
+// LLM of the evaluating professor. Sent from code on every call alongside the
+// system prompt (lib/agent-prompt.ts), so the dashboard no longer decides the
+// agent's behaviour. These values are reported in the thesis; the rationale for
+// each one is in docs/agente/vapi-config.md.
+export const EVALUATOR_MODEL = {
+    provider: 'openai',
+    model: 'gpt-4o',
+    temperature: 0.4,
+    maxTokens: 250,
+} as const;
+
 // Future multi-voice configuration. The selector is intentionally hidden while
 // Investfied uses the single default voice provided by Vapi. Keep these entries
 // documented so VoiceSelector can be restored without rebuilding the feature.

@@ -4,11 +4,14 @@ import { ArrowLeft, Clock3, LockKeyhole } from 'lucide-react';
 import SurveyForm from '@/components/surveys/SurveyForm';
 import { Button } from '@/components/ui/button';
 import { getSurveyProgress } from '@/lib/actions/survey.actions';
+import { guardParticipantPage } from '@/lib/study/access';
 import { findSurveyStage, SURVEY_INSTRUMENTS } from '@/lib/surveys/catalog';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SurveyStagePage({ params }: { params: Promise<{ stageId: string }> }) {
+    await guardParticipantPage();
+
     const { stageId } = await params;
     const stage = findSurveyStage(stageId);
     const progressResult = await getSurveyProgress();

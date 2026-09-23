@@ -7,6 +7,7 @@ import {
     ragasEvaluations,
     sessionTurns,
     turnEvaluations,
+    turnFeedback,
     turnRetrievals,
     users,
     voiceSessions,
@@ -75,6 +76,10 @@ export interface MetricsSessionRow {
     startedAt: Date;
     endedAt: Date | null;
     durationSeconds: number;
+    difficultyLevel: number;
+    levelSource: string;
+    preSessionAnxiety: number | null;
+    postSessionAnxiety: number | null;
     bookId: string;
     bookTitle: string;
 }
@@ -89,6 +94,10 @@ export async function fetchSessions(): Promise<MetricsSessionRow[]> {
             startedAt: voiceSessions.startedAt,
             endedAt: voiceSessions.endedAt,
             durationSeconds: voiceSessions.durationSeconds,
+            difficultyLevel: voiceSessions.difficultyLevel,
+            levelSource: voiceSessions.levelSource,
+            preSessionAnxiety: voiceSessions.preSessionAnxiety,
+            postSessionAnxiety: voiceSessions.postSessionAnxiety,
             bookId: voiceSessions.bookId,
             bookTitle: books.title,
         })
@@ -152,6 +161,24 @@ export interface MetricsRagasRow {
     contextPrecision: number | null;
     contextRecall: number | null;
     computedAt: Date;
+}
+
+export interface MetricsFeedbackRow {
+    turnId: string;
+    contentLevel: number | null;
+    clarityLevel: number | null;
+}
+
+/** Three-dimension feedback on STUDENT answers (docs/propuestas/02). */
+export async function fetchTurnFeedback(promptVersion: string): Promise<MetricsFeedbackRow[]> {
+    return db
+        .select({
+            turnId: turnFeedback.turnId,
+            contentLevel: turnFeedback.contentLevel,
+            clarityLevel: turnFeedback.clarityLevel,
+        })
+        .from(turnFeedback)
+        .where(eq(turnFeedback.promptVersion, promptVersion));
 }
 
 export async function fetchRagasScores(promptVersion: string): Promise<MetricsRagasRow[]> {

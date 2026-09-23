@@ -17,6 +17,12 @@ import {
 } from './latency';
 import { computePrecision, type PrecisionResult } from './precision';
 import {
+    EMPTY_DIMENSION_SUMMARY,
+    normalizeRubricLevel,
+    summarizeDimension,
+    type DimensionSummary,
+} from '../feedback/rubric';
+import {
     RAGAS_PROMPT_VERSION,
     aggregateRagas,
     type RagasScores,
@@ -25,6 +31,7 @@ import {
 import { buildRagasTriples, type RagasTriple } from './triples';
 import type {
     MetricsEvaluationRow,
+    MetricsFeedbackRow,
     MetricsRagasRow,
     MetricsRetrievalRow,
     MetricsSessionRow,
@@ -45,6 +52,8 @@ export interface MetricsInput {
     retrievals: MetricsRetrievalRow[];
     evaluations: MetricsEvaluationRow[];
     ragasRows: MetricsRagasRow[];
+    /** Three-dimension feedback on student answers (docs/propuestas/02). */
+    feedbackRows: MetricsFeedbackRow[];
 }
 
 export interface SessionReport {
@@ -57,6 +66,14 @@ export interface SessionReport {
     startedAt: Date;
     endedAt: Date | null;
     durationSeconds: number;
+    /** Graded-exposure level the simulation ran at (docs/propuestas/01). */
+    difficultyLevel: number;
+    /** 'auto' when the student kept the suggested level, 'manual' when they overrode it. */
+    levelSource: string;
+    /** Self-report 0-10 before the session. Null means unanswered, not zero. */
+    preSessionAnxiety: number | null;
+    /** Self-report 0-10 after the session. Null means unanswered, not zero. */
+    postSessionAnxiety: number | null;
     turns: number;
     agentTurns: number;
     studentTurns: number;
@@ -64,6 +81,14 @@ export interface SessionReport {
     studentLatency: LatencySummary;
     precision: PrecisionResult;
     ragas: RagasSummary;
+    /**
+     * Dimensions 1 and 2 of the post-session report, averaged over this
+     * session's STUDENT answers. Dimension 3 is not here: it is not scored (see
+     * lib/feedback/observations.ts), and its counts are already reported as the
+     * student-latency columns of this same row.
+     */
+    feedbackContent: DimensionSummary;
+    feedbackClarity: DimensionSummary;
 }
 
 export interface ParticipantReport {
@@ -128,7 +153,7 @@ function ragasScoresOf(rows: ReadonlyArray<MetricsRagasRow>): RagasScores[] {
 }
 
 export function buildMetricsReport(input: MetricsInput): MetricsReport {
-    const { turns, sessions, retrievals, evaluations, ragasRows } = input;
+    const { turns, sessions, retrievals, evaluations, ragasRows, feedbackRows } = input;
 
     // --- ICA ----------------------------------------------------------------
     const ica = computeIca(ARCHITECTURE_COMPONENTS);
@@ -205,11 +230,23 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
         else ragasRowsBySession.set(sessionId, [row]);
     }
 
+    // Student answers, so the grouping goes straight through the turn's session.
+    const feedbackBySession = new Map<string, MetricsFeedbackRow[]>();
+    const turnToSession = new Map(turns.map((turn) => [turn.turnId, turn.sessionId]));
+    for (const row of feedbackRows) {
+        const sessionId = turnToSession.get(row.turnId);
+        if (!sessionId) continue;
+        const list = feedbackBySession.get(sessionId);
+        if (list) list.push(row);
+        else feedbackBySession.set(sessionId, [row]);
+    }
+
     const sessionReports: SessionReport[] = sessions.map((session) => {
         const sessionTurnList = turnsBySession.get(session.sessionId) ?? [];
         const sessionAgentTurns = sessionTurnList.filter((t) => t.role === 'assistant');
         const sessionStudentTurns = sessionTurnList.filter((t) => t.role === 'user');
         const sessionRagasRows = ragasRowsBySession.get(session.sessionId);
+        const sessionFeedbackRows = feedbackBySession.get(session.sessionId);
 
         return {
             sessionId: session.sessionId,
@@ -221,6 +258,10 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
             startedAt: session.startedAt,
             endedAt: session.endedAt,
             durationSeconds: session.durationSeconds,
+            difficultyLevel: session.difficultyLevel,
+            levelSource: session.levelSource,
+            preSessionAnxiety: session.preSessionAnxiety,
+            postSessionAnxiety: session.postSessionAnxiety,
             turns: sessionTurnList.length,
             agentTurns: sessionAgentTurns.length,
             studentTurns: sessionStudentTurns.length,
@@ -233,6 +274,12 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
                     .length,
             }),
             ragas: sessionRagasRows ? aggregateRagas(ragasScoresOf(sessionRagasRows)) : EMPTY_RAGAS,
+            feedbackContent: sessionFeedbackRows
+                ? summarizeDimension(sessionFeedbackRows.map((row) => normalizeRubricLevel(row.contentLevel)))
+                : EMPTY_DIMENSION_SUMMARY,
+            feedbackClarity: sessionFeedbackRows
+                ? summarizeDimension(sessionFeedbackRows.map((row) => normalizeRubricLevel(row.clarityLevel)))
+                : EMPTY_DIMENSION_SUMMARY,
         };
     });
 

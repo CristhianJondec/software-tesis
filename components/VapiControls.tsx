@@ -1,19 +1,32 @@
 'use client';
 
-import { History, HelpCircle, Mic, MicOff, Play, PhoneOff } from "lucide-react";
+import { History, HelpCircle, LineChart, Mic, MicOff, PhoneOff, Target } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import {IBook} from "@/types";
 import Image from "next/image";
 import Link from "next/link";
+import PostSessionSurvey from "@/components/PostSessionSurvey";
+import SessionSetup from "@/components/SessionSetup";
 import Transcript from "@/components/Transcript";
+import {getDifficultyLevel} from "@/lib/difficulty/levels";
+import type {PreparationTopicId} from "@/lib/preparation/topics";
 import {toast} from "sonner";
 
 import {useEffect, useRef, useState} from "react";
 
-const VapiControls = ({ book }: { book: IBook }) => {
-    const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, isMuted, toggleMuted, clearError, limitError, maxDurationSeconds } = useVapi(book)
+const VapiControls = ({
+    book,
+    focusTopics = [],
+}: {
+    book: IBook;
+    /** Topics the student picked in the preparation map, from the `focus` query param. */
+    focusTopics?: PreparationTopicId[];
+}) => {
+    const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, isMuted, toggleMuted, isClosing, clearError, limitError, maxDurationSeconds, activeLevel, finishedSessionId, clearFinishedSession } = useVapi(book)
     const [showRequirements, setShowRequirements] = useState(false);
     const requirementsRef = useRef<HTMLDivElement>(null);
+    const level = getDifficultyLevel(activeLevel);
+    const isStarting = status === 'connecting';
 
     useEffect(() => {
         if (limitError) {
@@ -81,16 +94,19 @@ const VapiControls = ({ book }: { book: IBook }) => {
                                 <div className="absolute inset-0 rounded-full bg-white animate-ping opacity-75" />
                             )}
                             <button
-                                onClick={isActive ? stop : start}
-                                disabled={status === 'connecting'}
-                                aria-label={isActive ? 'Finalizar conversación' : 'Iniciar conversación'}
-                                className={`vapi-mic-btn shadow-md !w-[60px] !h-[60px] z-10 ${isActive ? 'vapi-mic-btn-active' : 'vapi-mic-btn-inactive'}`}
+                                onClick={() => { void stop(); }}
+                                disabled={!isActive || isClosing}
+                                aria-label="Finalizar conversación"
+                                title={
+                                    isClosing
+                                        ? 'El jurado está cerrando la sesión'
+                                        : isActive
+                                          ? 'Finalizar conversación'
+                                          : 'La sesión se inicia desde el panel de abajo'
+                                }
+                                className={`vapi-mic-btn shadow-md !w-[60px] !h-[60px] z-10 ${isActive ? 'vapi-mic-btn-active' : 'vapi-mic-btn-inactive opacity-50'}`}
                             >
-                                {isActive ? (
-                                    <PhoneOff className="size-7 text-white" />
-                                ) : (
-                                    <Play className="size-7 text-[#212a3b] ml-0.5" />
-                                )}
+                                <PhoneOff className={`size-7 ${isActive ? 'text-white' : 'text-[#212a3b]'}`} />
                             </button>
                         </div>
 
@@ -120,13 +136,31 @@ const VapiControls = ({ book }: { book: IBook }) => {
                                 <p className="text-[#3d485e] font-medium break-words">Por {book.author}</p>
                             </div>
 
-                            <Link
-                                href={`/history?bookId=${encodeURIComponent(book.id)}`}
-                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
-                            >
-                                <History className="size-4" />
-                                Ver historial
-                            </Link>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">
+                                <Link
+                                    href={`/preparacion?bookId=${encodeURIComponent(book.id)}`}
+                                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
+                                >
+                                    <Target className="size-4" />
+                                    Mapa de preparación
+                                </Link>
+
+                                <Link
+                                    href={`/progreso?bookId=${encodeURIComponent(book.id)}`}
+                                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
+                                >
+                                    <LineChart className="size-4" />
+                                    Mi progreso
+                                </Link>
+
+                                <Link
+                                    href={`/history?bookId=${encodeURIComponent(book.id)}`}
+                                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
+                                >
+                                    <History className="size-4" />
+                                    Ver historial
+                                </Link>
+                            </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3">
@@ -135,11 +169,25 @@ const VapiControls = ({ book }: { book: IBook }) => {
                                 <span className="vapi-status-text">{statusDisplay.label}</span>
                             </div>
 
+                            {isClosing && (
+                                <div className="vapi-status-indicator">
+                                    <span className="vapi-status-text">
+                                        Cerrando con las evidencias de la sesión…
+                                    </span>
+                                </div>
+                            )}
+
                             <div className="vapi-status-indicator">
                                 <span className="vapi-status-text">
                                     {formatDuration(duration)}/{formatDuration(maxDurationSeconds)}
                                 </span>
                             </div>
+
+                            {isActive && (
+                                <div className="vapi-status-indicator">
+                                    <span className="vapi-status-text">Nivel {level.id} — {level.name}</span>
+                                </div>
+                            )}
 
                             <div className="relative" ref={requirementsRef}>
                                 <button
@@ -171,6 +219,18 @@ const VapiControls = ({ book }: { book: IBook }) => {
                     </div>
                 </div>
 
+            {!isActive && (
+                // Remounted on every finished session so the scale and the
+                // suggestion are recomputed against the session that just closed.
+                <SessionSetup
+                    key={finishedSessionId ?? 'initial'}
+                    bookId={book.id}
+                    disabled={isStarting}
+                    focusTopics={focusTopics}
+                    onStart={start}
+                />
+            )}
+
             <div className="vapi-transcript-wrapper">
                 <div className="transcript-container min-h-[400px]">
                     <Transcript
@@ -181,6 +241,10 @@ const VapiControls = ({ book }: { book: IBook }) => {
                 </div>
             </div>
             </div>
+
+            {finishedSessionId && (
+                <PostSessionSurvey sessionId={finishedSessionId} onDone={clearFinishedSession} />
+            )}
         </>
     )
 }

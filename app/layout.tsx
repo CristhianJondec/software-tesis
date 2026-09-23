@@ -6,6 +6,7 @@ import "./globals.css";
 import {Toaster} from "@/components/ui/sonner";
 import {checkMetricsAccess} from "@/lib/metrics/access";
 import {checkAdminAccess} from "@/lib/admin/access";
+import {getStudyContext} from "@/lib/study/access";
 
 const ibmPlexSerif = IBM_Plex_Serif({
     variable: "--font-ibm-plex-serif",
@@ -35,9 +36,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [metricsAccess, adminAccess] = await Promise.all([
+  const [metricsAccess, adminAccess, studyContext] = await Promise.all([
     checkMetricsAccess(),
     checkAdminAccess(),
+    getStudyContext(),
   ]);
 
   return (
@@ -45,7 +47,12 @@ export default async function RootLayout({
       <body
         className={`${ibmPlexSerif.variable} ${monaSans.variable} relative font-sans antialiased`}
       >
-        <Navbar showMetrics={metricsAccess.allowed} showAdmin={adminAccess.allowed} />
+        <Navbar
+          showMetrics={metricsAccess.allowed}
+          showAdmin={adminAccess.allowed}
+          studyGroup={studyContext?.group ?? null}
+          hasInterventionAccess={studyContext?.hasInterventionAccess ?? false}
+        />
         {children}
         <Toaster />
       </body>

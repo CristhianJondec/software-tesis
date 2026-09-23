@@ -8,25 +8,159 @@ import {
     bookSegments,
     books,
     ragasEvaluations,
+    sessionPredictions,
     sessionTurns,
     turnEvaluations,
     turnRetrievals,
     voiceSessions,
 } from '@/database/schema';
 import { requireUser } from '@/lib/session';
+import { requireInterventionAccess } from '@/lib/study/access';
 import { MAX_SESSION_DURATION_MINUTES } from '@/lib/constants';
+import {
+    normalizeAnxietyScore,
+    suggestDifficultyLevel,
+    type PreviousSessionSummary,
+} from '@/lib/difficulty/adaptation';
+import {
+    getDifficultyLevel,
+    isDifficultyLevelId,
+    type DifficultyLevelId,
+} from '@/lib/difficulty/levels';
+import { summarizeSessionSignals } from '@/lib/difficulty/signals';
+import { classifyQuestionTopicId } from '@/lib/preparation/classify';
+import { normalizeFocusTopics, serializeFocusTopics } from '@/lib/preparation/focus';
+import {
+    isEmptyPrediction,
+    normalizePrediction,
+    serializeTopicIds,
+} from '@/lib/prediction/questions';
 import { getCurrentBillingPeriodStart } from '@/lib/subscription-constants';
 import { getVapiCallDetails } from '@/lib/vapi.server';
 import type {
     EndSessionResult,
     LinkVapiCallResult,
+    SaveAnxietyResult,
     SaveTurnInput,
     SaveTurnResult,
+    SessionPreparationResult,
+    StartSessionInput,
     StartSessionResult,
 } from '@/types';
 
-export const startVoiceSession = async (bookId: string): Promise<StartSessionResult> => {
+/**
+ * Loads the summary of the student's last finished session with this document,
+ * which is the only history the adaptation rule reads.
+ *
+ * Sessions without a single turn are skipped: a call that never connected is not
+ * a practice session and must not freeze the student's progression. A call where
+ * only the agent spoke IS kept — a student who never answered is evidence.
+ */
+const loadPreviousSessionSummary = async (
+    userId: string,
+    bookId: string,
+): Promise<{
+    summary: PreviousSessionSummary;
+    startedAt: Date;
+    previousStrategy: string | null;
+} | null> => {
+    const [previous] = await db
+        .select({
+            id: voiceSessions.id,
+            difficultyLevel: voiceSessions.difficultyLevel,
+            postSessionAnxiety: voiceSessions.postSessionAnxiety,
+            startedAt: voiceSessions.startedAt,
+        })
+        .from(voiceSessions)
+        .innerJoin(sessionTurns, eq(sessionTurns.sessionId, voiceSessions.id))
+        .where(and(eq(voiceSessions.userId, userId), eq(voiceSessions.bookId, bookId)))
+        .groupBy(
+            voiceSessions.id,
+            voiceSessions.difficultyLevel,
+            voiceSessions.postSessionAnxiety,
+            voiceSessions.startedAt,
+        )
+        .orderBy(desc(voiceSessions.startedAt))
+        .limit(1);
+
+    if (!previous) return null;
+
+    const turns = await db
+        .select({
+            role: sessionTurns.role,
+            content: sessionTurns.content,
+            studentLatencyMs: sessionTurns.studentLatencyMs,
+        })
+        .from(sessionTurns)
+        .where(eq(sessionTurns.sessionId, previous.id));
+
+    // What the student said they would try differently at the end of that
+    // session (docs/propuestas/04). Shown back before this one starts, which is
+    // the only moment it can still change what they do.
+    const [prediction] = await db
+        .select({
+            nextStrategy: sessionPredictions.nextStrategy,
+            strategyAt: sessionPredictions.strategyAt,
+        })
+        .from(sessionPredictions)
+        .where(eq(sessionPredictions.sessionId, previous.id))
+        .limit(1);
+
+    return {
+        startedAt: previous.startedAt,
+        previousStrategy: prediction?.nextStrategy ?? null,
+        summary: {
+            level: getDifficultyLevel(previous.difficultyLevel).id,
+            signals: summarizeSessionSignals(turns),
+            postSessionAnxiety: normalizeAnxietyScore(previous.postSessionAnxiety),
+        },
+    };
+};
+
+/**
+ * Everything the pre-session screen needs to suggest a difficulty level.
+ *
+ * The suggestion itself is NOT computed here: `suggestDifficultyLevel` is a pure
+ * function, so the client runs it as the student moves the 0-10 slider and sees
+ * the justification update live. The server recomputes it on `startVoiceSession`
+ * and stores its own verdict, so a tampered client cannot forge `levelSource`.
+ */
+export const getSessionPreparation = async (bookId: string): Promise<SessionPreparationResult> => {
     try {
+        const user = await requireUser();
+
+        const ownerCheck = await db
+            .select({ id: books.id })
+            .from(books)
+            .where(and(eq(books.id, bookId), eq(books.userId, user.id)))
+            .limit(1);
+
+        if (ownerCheck.length === 0) {
+            return { success: false, error: 'Investigación no encontrada.' };
+        }
+
+        const previous = await loadPreviousSessionSummary(user.id, bookId);
+
+        return {
+            success: true,
+            data: {
+                previous: previous?.summary ?? null,
+                previousStartedAt: previous?.startedAt.toISOString() ?? null,
+                previousStrategy: previous?.previousStrategy ?? null,
+            },
+        };
+    } catch (e) {
+        console.error('Error loading session preparation', e);
+        return { success: false, error: 'No se pudo preparar la sesión.' };
+    }
+};
+
+export const startVoiceSession = async (
+    bookId: string,
+    input: StartSessionInput = {},
+): Promise<StartSessionResult> => {
+    try {
+        await requireInterventionAccess();
         const user = await requireUser();
         const userId = user.id;
 
@@ -40,6 +174,25 @@ export const startVoiceSession = async (bookId: string): Promise<StartSessionRes
             return { success: false, error: 'Book not found or unauthorized' };
         }
 
+        const preSessionAnxiety = normalizeAnxietyScore(input.preSessionAnxiety);
+
+        // The rule is re-run server-side over the stored history: `levelSource`
+        // has to say what actually happened, not what the browser claimed.
+        const previous = await loadPreviousSessionSummary(userId, bookId);
+        const suggestion = suggestDifficultyLevel({
+            preSessionAnxiety,
+            previous: previous?.summary ?? null,
+        });
+
+        const difficultyLevel: DifficultyLevelId = isDifficultyLevelId(input.difficultyLevel)
+            ? input.difficultyLevel
+            : suggestion.level;
+        const levelSource = difficultyLevel === suggestion.level ? 'auto' : 'manual';
+
+        // Narrowed server-side: the client may ask for any topic list, but only
+        // ids of the taxonomy reach the prompt and the stored row.
+        const focusTopics = normalizeFocusTopics(input.focusTopics);
+
         const billingPeriodStart = getCurrentBillingPeriodStart();
 
         const [session] = await db
@@ -51,17 +204,91 @@ export const startVoiceSession = async (bookId: string): Promise<StartSessionRes
                 startedAt: new Date(),
                 billingPeriodStart,
                 durationSeconds: 0,
+                difficultyLevel,
+                levelSource,
+                preSessionAnxiety,
+                focusTopics: serializeFocusTopics(focusTopics),
             })
             .returning();
+
+        // The three written predictions (docs/propuestas/04), tagged against the
+        // taxonomy by the same lexical classifier the preparation map uses.
+        // Written here, before the call connects, so the "antes" is fixed while
+        // the session produces the "después".
+        //
+        // Best effort on purpose: the form is optional and a failure to store it
+        // must never stop a student from practising. It is logged instead.
+        const prediction = normalizePrediction(input.prediction);
+        if (!isEmptyPrediction(prediction)) {
+            try {
+                await db.insert(sessionPredictions).values({
+                    id: nanoid(),
+                    sessionId: session.id,
+                    expectedQuestions: prediction.expectedQuestions,
+                    expectedTopics: serializeTopicIds(prediction.expectedTopics),
+                    fearedPart: prediction.fearedPart,
+                    fearedTopic: prediction.fearedTopic,
+                    blankOutcome: prediction.blankOutcome,
+                });
+            } catch (predictionError) {
+                console.error('Error saving session prediction', predictionError);
+            }
+        }
 
         return {
             success: true,
             sessionId: session.id,
             maxDurationMinutes: MAX_SESSION_DURATION_MINUTES,
+            difficultyLevel,
+            levelSource,
+            focusTopics,
         };
     } catch (e) {
         console.error('Error starting voice session', e);
         return { success: false, error: 'Failed to start voice session. Please try again later.' };
+    }
+};
+
+/**
+ * Stores the 0-10 self-report taken right after the session closes.
+ *
+ * Write-once on purpose: the number the student gave when the simulation ended
+ * is the measurement, and a later edit would be a different measurement.
+ */
+export const savePostSessionAnxiety = async (
+    sessionId: string,
+    value: number,
+): Promise<SaveAnxietyResult> => {
+    try {
+        const user = await requireUser();
+
+        const score = normalizeAnxietyScore(value);
+        if (score === null) {
+            return { success: false, error: 'La respuesta debe estar entre 0 y 10.' };
+        }
+
+        const [session] = await db
+            .select({ id: voiceSessions.id, postSessionAnxiety: voiceSessions.postSessionAnxiety })
+            .from(voiceSessions)
+            .where(and(eq(voiceSessions.id, sessionId), eq(voiceSessions.userId, user.id)))
+            .limit(1);
+
+        if (!session) {
+            return { success: false, error: 'Sesión no encontrada.' };
+        }
+        if (session.postSessionAnxiety !== null) {
+            return { success: false, error: 'Esta sesión ya tiene registrada su medición final.' };
+        }
+
+        await db
+            .update(voiceSessions)
+            .set({ postSessionAnxiety: score, updatedAt: new Date() })
+            .where(eq(voiceSessions.id, sessionId));
+
+        return { success: true };
+    } catch (e) {
+        console.error('Error saving post-session anxiety', e);
+        return { success: false, error: 'No se pudo guardar tu respuesta.' };
     }
 };
 
@@ -159,6 +386,11 @@ export const saveSessionTurn = async (input: SaveTurnInput): Promise<SaveTurnRes
                 endedAt,
                 studentLatencyMs: input.role === 'user' ? (input.studentLatencyMs ?? null) : null,
                 systemLatencyMs: input.role === 'assistant' ? (input.systemLatencyMs ?? null) : null,
+                maxPauseMs: input.role === 'user' ? (input.maxPauseMs ?? null) : null,
+                // Only agent turns carry a topic: the preparation map counts what
+                // was ASKED about, and a student answer inherits the topic of the
+                // question it follows (lib/preparation/map.ts).
+                topic: input.role === 'assistant' ? classifyQuestionTopicId(content) : null,
             })
             .returning({ id: sessionTurns.id });
 
@@ -207,6 +439,10 @@ export const getConversationHistory = async (bookId?: string) => {
                 startedAt: voiceSessions.startedAt,
                 endedAt: voiceSessions.endedAt,
                 durationSeconds: voiceSessions.durationSeconds,
+                difficultyLevel: voiceSessions.difficultyLevel,
+                levelSource: voiceSessions.levelSource,
+                preSessionAnxiety: voiceSessions.preSessionAnxiety,
+                postSessionAnxiety: voiceSessions.postSessionAnxiety,
                 turnCount: count(sessionTurns.id),
             })
             .from(voiceSessions)
@@ -220,6 +456,10 @@ export const getConversationHistory = async (bookId?: string) => {
                 voiceSessions.startedAt,
                 voiceSessions.endedAt,
                 voiceSessions.durationSeconds,
+                voiceSessions.difficultyLevel,
+                voiceSessions.levelSource,
+                voiceSessions.preSessionAnxiety,
+                voiceSessions.postSessionAnxiety,
                 books.title,
                 books.author,
             )
@@ -245,6 +485,10 @@ export const getConversationById = async (sessionId: string) => {
                 startedAt: voiceSessions.startedAt,
                 endedAt: voiceSessions.endedAt,
                 durationSeconds: voiceSessions.durationSeconds,
+                difficultyLevel: voiceSessions.difficultyLevel,
+                levelSource: voiceSessions.levelSource,
+                preSessionAnxiety: voiceSessions.preSessionAnxiety,
+                postSessionAnxiety: voiceSessions.postSessionAnxiety,
                 vapiCallId: voiceSessions.vapiCallId,
             })
             .from(voiceSessions)
@@ -266,6 +510,7 @@ export const getConversationById = async (sessionId: string) => {
                 endedAt: sessionTurns.endedAt,
                 studentLatencyMs: sessionTurns.studentLatencyMs,
                 systemLatencyMs: sessionTurns.systemLatencyMs,
+                maxPauseMs: sessionTurns.maxPauseMs,
             })
             .from(sessionTurns)
             .where(eq(sessionTurns.sessionId, conversation.id))

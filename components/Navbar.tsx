@@ -3,23 +3,49 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, ChevronDown, History, LogOut, ShieldCheck } from 'lucide-react';
+import { BarChart3, ChevronDown, History, LineChart, LogOut, ShieldCheck, Target } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 
 import { Button } from '@/components/ui/button';
 import { signOut, useSession } from '@/lib/auth-client';
+import { landingPathFor, type StudyGroup } from '@/lib/study/groups';
 import { cn } from '@/lib/utils';
 
-const navItems = [
+const interventionNavItems = [
     { label: 'Biblioteca', href: '/' },
     { label: 'Agregar', href: '/books/new' },
 ];
 
-const Navbar = ({ showMetrics = false, showAdmin = false }: { showMetrics?: boolean; showAdmin?: boolean }) => {
+interface NavbarProps {
+    showMetrics?: boolean;
+    showAdmin?: boolean;
+    studyGroup?: StudyGroup | null;
+    /** Researchers and the experimental arm. The control arm never sees the agent. */
+    hasInterventionAccess?: boolean;
+}
+
+/**
+ * The navigation is the visible half of the study-group gate: a control
+ * participant is never shown a link to the intervention, so they never have to
+ * be bounced off one. The enforcing half lives server-side in
+ * `lib/study/access`; this only decides what is worth offering.
+ */
+const Navbar = ({
+    showMetrics = false,
+    showAdmin = false,
+    studyGroup = null,
+    hasInterventionAccess = false,
+}: NavbarProps) => {
     const pathName = usePathname();
     const router = useRouter();
     const { data: session, isPending } = useSession();
     const user = session?.user;
+    const isParticipant = Boolean(studyGroup) || hasInterventionAccess;
+    const navItems = user
+        ? hasInterventionAccess
+            ? interventionNavItems
+            : []
+        : interventionNavItems;
     const userLabel = user?.name?.trim() || user?.email?.trim() || 'Usuario';
     const userInitial = userLabel.charAt(0).toUpperCase();
 
@@ -32,7 +58,11 @@ const Navbar = ({ showMetrics = false, showAdmin = false }: { showMetrics?: bool
     return (
         <header className="w-full fixed z-50 bg-(--bg-primary)">
             <div className="wrapper navbar-height py-4 flex justify-between items-center">
-                <Link href="/" className="flex gap-2 items-center" aria-label="Ir a la biblioteca de Investfied">
+                <Link
+                    href={user ? landingPathFor(hasInterventionAccess ? 'experimental' : studyGroup) : '/'}
+                    className="flex gap-2 items-center"
+                    aria-label="Ir al inicio de Investfied"
+                >
                     <Image src="/assets/logo.png" alt="" width={42} height={26} />
                     <span className="logo-text">Investfied</span>
                 </Link>
@@ -55,16 +85,27 @@ const Navbar = ({ showMetrics = false, showAdmin = false }: { showMetrics?: bool
                         );
                     })}
 
-                    {user && (
-                        <Link
-                            href="/surveys"
-                            className={cn(
-                                'nav-link-base',
-                                pathName.startsWith('/surveys') ? 'nav-link-active' : 'text-black hover:opacity-70',
-                            )}
-                        >
-                            Encuestas
-                        </Link>
+                    {isParticipant && (
+                        <>
+                            <Link
+                                href="/materiales"
+                                className={cn(
+                                    'nav-link-base',
+                                    pathName.startsWith('/materiales') ? 'nav-link-active' : 'text-black hover:opacity-70',
+                                )}
+                            >
+                                Materiales
+                            </Link>
+                            <Link
+                                href="/surveys"
+                                className={cn(
+                                    'nav-link-base',
+                                    pathName.startsWith('/surveys') ? 'nav-link-active' : 'text-black hover:opacity-70',
+                                )}
+                            >
+                                Encuestas
+                            </Link>
+                        </>
                     )}
 
                     <div className="flex items-center">
@@ -94,12 +135,30 @@ const Navbar = ({ showMetrics = false, showAdmin = false }: { showMetrics?: bool
 
                                         <DropdownMenu.Separator className="h-px bg-[var(--border-subtle)] my-1" />
 
-                                        <DropdownMenu.Item asChild>
-                                            <Link href="/history" className="profile-menu-item">
-                                                <History className="size-4" />
-                                                Historial
-                                            </Link>
-                                        </DropdownMenu.Item>
+                                        {hasInterventionAccess && (
+                                            <>
+                                                <DropdownMenu.Item asChild>
+                                                    <Link href="/history" className="profile-menu-item">
+                                                        <History className="size-4" />
+                                                        Historial
+                                                    </Link>
+                                                </DropdownMenu.Item>
+
+                                                <DropdownMenu.Item asChild>
+                                                    <Link href="/preparacion" className="profile-menu-item">
+                                                        <Target className="size-4" />
+                                                        Mapa de preparación
+                                                    </Link>
+                                                </DropdownMenu.Item>
+
+                                                <DropdownMenu.Item asChild>
+                                                    <Link href="/progreso" className="profile-menu-item">
+                                                        <LineChart className="size-4" />
+                                                        Mi progreso
+                                                    </Link>
+                                                </DropdownMenu.Item>
+                                            </>
+                                        )}
 
                                         {showMetrics && (
                                             <DropdownMenu.Item asChild>

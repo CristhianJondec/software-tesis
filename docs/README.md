@@ -67,3 +67,16 @@ cruzar cada encuesta con el uso real: cuántas sesiones, cuánto duraron, y cóm
 latencia de respuesta verbal del estudiante.
 
 > Verifica que el instrumento mida **autoeficacia**, que es lo declarado en los objetivos.
+
+## Propuestas de diferenciación (carpeta `propuestas/`)
+
+Responde a la observación de que el sistema *"se parece a NotebookLM"*. Mismo formato:
+un archivo = un chat. Leer primero [`propuestas/00-generalidades.md`](propuestas/00-generalidades.md).
+
+[P01](propuestas/01-exposicion-gradual-adaptativa.md) Exposición gradual adaptativa ·
+[P02](propuestas/02-retroalimentacion-tres-dimensiones.md) Retroalimentación en 3 dimensiones ·
+[P03](propuestas/03-mapa-de-preparacion.md) Mapa de preparación ·
+[P04](propuestas/04-prediccion-vs-realidad.md) Predicciones vs. resultados ·
+[P05](propuestas/05-evidencias-de-avance.md) Evidencias de avance ·
+[P06](propuestas/06-contexto-untrujillo.md) Contexto UNT ·
+[P07](propuestas/07-diseno-experimental.md) Diseño experimental (3 sesiones + control)
