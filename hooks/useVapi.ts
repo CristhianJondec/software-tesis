@@ -10,7 +10,9 @@ import {
     ASSISTANT_ID,
     EVALUATOR_MODEL,
     MAX_SESSION_DURATION_MINUTES,
+    VAPI_SPANISH_TRANSCRIBER,
     VAPI_SPANISH_VOICE,
+    VAPI_START_SPEAKING_PLAN,
 } from '@/lib/constants';
 import { buildEvaluatorSystemPrompt } from '@/lib/agent-prompt';
 import {
@@ -27,8 +29,13 @@ import {
     endVoiceSession,
     linkVapiCall,
     saveSessionTurn,
+    updateSessionTurn,
 } from '@/lib/actions/session.actions';
 import { recordSessionClosing } from '@/lib/actions/progress.actions';
+import {
+    mergeAdjacentTranscriptMessage,
+    mergeTranscriptFragments,
+} from '@/lib/transcript';
 
 export interface StartSessionOptions {
     /** Level confirmed on the pre-session screen. The server has the last word. */
@@ -83,6 +90,17 @@ function getVapi() {
     return vapi;
 }
 
+type TranscriptRole = 'assistant' | 'user';
+
+interface ActivePersistedTurn {
+    role: TranscriptRole;
+    content: string;
+    endedAt: number;
+    maxPauseMs: number | null;
+    turnIdPromise: Promise<string | null>;
+    updateQueue: Promise<void>;
+}
+
 export type CallStatus = 'idle' | 'connecting' | 'starting' | 'listening' | 'thinking' | 'speaking';
 
 export function useVapi(book: IBook) {
@@ -125,7 +143,10 @@ export function useVapi(book: IBook) {
     const pendingSystemLatencyRef = useRef<number | null>(null);
     const userTurnStartedAtRef = useRef<number | null>(null);
     const agentTurnStartedAtRef = useRef<number | null>(null);
-    const lastSavedTurnRef = useRef<string | null>(null);
+    // Consecutive `final` events from the same speaker are fragments of one
+    // logical intervention. Keep its row so later chunks extend it instead of
+    // inflating answer counts and session metrics.
+    const activePersistedTurnRef = useRef<ActivePersistedTurn | null>(null);
 
     const resetTurnTracking = useCallback(() => {
         turnIndexRef.current = 0;
@@ -137,32 +158,57 @@ export function useVapi(book: IBook) {
         pendingSystemLatencyRef.current = null;
         userTurnStartedAtRef.current = null;
         agentTurnStartedAtRef.current = null;
-        lastSavedTurnRef.current = null;
+        activePersistedTurnRef.current = null;
     }, []);
 
-    // Persist a closed turn immediately. Fire and forget: a storage failure must
-    // never interrupt the conversation in progress.
+    // Persist the first final chunk immediately so retrievals can anchor to it.
+    // Further final chunks from the same speaker update that same database row.
     const persistTurn = useCallback(
-        (role: 'assistant' | 'user', content: string, startedAt: number, endedAt: number) => {
+        (role: TranscriptRole, content: string, startedAt: number, endedAt: number) => {
             const sessionId = sessionIdRef.current;
             const trimmed = content?.trim();
             if (!sessionId || !trimmed) return;
 
-            const fingerprint = role + '|' + trimmed;
-            if (lastSavedTurnRef.current === fingerprint) return;
-            lastSavedTurnRef.current = fingerprint;
+            const maxPauseMs = role === 'user' && maxUserPauseRef.current > 0 ? maxUserPauseRef.current : null;
+            const active = activePersistedTurnRef.current;
+
+            if (active?.role === role) {
+                const merged = mergeTranscriptFragments(active.content, trimmed);
+                active.content = merged;
+                active.endedAt = endedAt;
+                active.maxPauseMs =
+                    role === 'user'
+                        ? Math.max(active.maxPauseMs ?? 0, maxPauseMs ?? 0) || null
+                        : null;
+
+                const snapshot = {
+                    content: active.content,
+                    endedAt: active.endedAt,
+                    maxPauseMs: active.maxPauseMs,
+                };
+
+                // Serialize updates so a slower request can never overwrite a
+                // newer, longer version of the same turn.
+                active.updateQueue = active.updateQueue.then(async () => {
+                    const turnId = await active.turnIdPromise;
+                    if (!turnId) return;
+                    const result = await updateSessionTurn({ turnId, ...snapshot });
+                    if (!result.success) {
+                        console.error('Failed to extend session turn:', result.error);
+                    }
+                });
+                return;
+            }
 
             const studentLatencyMs = role === 'user' ? pendingStudentLatencyRef.current : null;
             const systemLatencyMs = role === 'assistant' ? pendingSystemLatencyRef.current : null;
-            // A turn with a single partial has no measurable gap, which is not
-            // the same as a gap of zero: it is reported as unmeasured.
-            const maxPauseMs = role === 'user' && maxUserPauseRef.current > 0 ? maxUserPauseRef.current : null;
             if (role === 'user') pendingStudentLatencyRef.current = null;
             if (role === 'assistant') pendingSystemLatencyRef.current = null;
 
-            saveSessionTurn({
+            const turnIndex = turnIndexRef.current++;
+            const turnIdPromise = saveSessionTurn({
                 sessionId,
-                turnIndex: turnIndexRef.current++,
+                turnIndex,
                 role,
                 content: trimmed,
                 startedAt,
@@ -171,10 +217,26 @@ export function useVapi(book: IBook) {
                 systemLatencyMs,
                 maxPauseMs,
             })
-                .then((res) => {
-                    if (!res.success) console.error('Failed to save session turn:', res.error);
+                .then((result) => {
+                    if (!result.success) {
+                        console.error('Failed to save session turn:', result.error);
+                        return null;
+                    }
+                    return result.turnId ?? null;
                 })
-                .catch((err) => console.error('Failed to save session turn:', err));
+                .catch((error) => {
+                    console.error('Failed to save session turn:', error);
+                    return null;
+                });
+
+            activePersistedTurnRef.current = {
+                role,
+                content: trimmed,
+                endedAt,
+                maxPauseMs,
+                turnIdPromise,
+                updateQueue: Promise.resolve(),
+            };
         },
         [],
     );
@@ -250,7 +312,15 @@ export function useVapi(book: IBook) {
 
             'speech-start': () => {
                 const now = Date.now();
-                agentTurnStartedAtRef.current = now;
+                if (activePersistedTurnRef.current?.role !== 'assistant') {
+                    agentTurnStartedAtRef.current = now;
+                }
+
+                // The agent taking the floor definitively closes the student's
+                // logical turn. Only now reset the partial-transcript tracking.
+                userTurnStartedAtRef.current = null;
+                lastUserPartialAtRef.current = null;
+                maxUserPauseRef.current = 0;
 
                 // System latency: student stopped talking -> agent starts replying.
                 if (userFinalAtRef.current !== null) {
@@ -336,21 +406,14 @@ export function useVapi(book: IBook) {
 
                         persistTurn(message.role, message.transcript, startedAt, endedAt);
 
-                        if (message.role === 'user') {
-                            userTurnStartedAtRef.current = null;
-                            lastUserPartialAtRef.current = null;
-                            maxUserPauseRef.current = 0;
-                        } else {
-                            agentTurnStartedAtRef.current = null;
-                        }
                     }
 
-                    setMessages((prev) => {
-                        const isDupe = prev.some(
-                            (m) => m.role === message.role && m.content === message.transcript,
-                        );
-                        return isDupe ? prev : [...prev, { role: message.role, content: message.transcript }];
-                    });
+                    setMessages((prev) =>
+                        mergeAdjacentTranscriptMessage(prev, {
+                            role: message.role,
+                            content: message.transcript,
+                        }),
+                    );
                 }
             },
 
@@ -459,8 +522,9 @@ export function useVapi(book: IBook) {
             // screen proposed, so the prompt and the stored row cannot disagree.
             const focusDirectives = buildFocusDirectives(result.focusTopics ?? []);
 
-            // Investfied currently exposes one voice only. It uses Vapi's native
-            // Latin American voice so no separate ElevenLabs credential is needed.
+            // Investfied currently exposes one voice only. It uses Azure's
+            // Peruvian-Spanish Camila voice through Vapi's default integration,
+            // so no separate Azure or ElevenLabs credential is needed.
             const assistantOverrides = {
                 // The agent's behaviour is versioned in the repo, not in the Vapi
                 // dashboard. Vapi merges this override onto the assistant, so the
@@ -487,10 +551,24 @@ export function useVapi(book: IBook) {
                     ],
                 },
                 voice: {
-                    provider: 'vapi' as const,
+                    provider: VAPI_SPANISH_VOICE.provider,
                     voiceId: VAPI_SPANISH_VOICE.voiceId,
-                    version: VAPI_SPANISH_VOICE.version,
-                    language: VAPI_SPANISH_VOICE.language,
+                    speed: VAPI_SPANISH_VOICE.speed,
+                    chunkPlan: {
+                        ...VAPI_SPANISH_VOICE.chunkPlan,
+                        formatPlan: {
+                            ...VAPI_SPANISH_VOICE.chunkPlan.formatPlan,
+                        },
+                    },
+                },
+                transcriber: {
+                    ...VAPI_SPANISH_TRANSCRIBER,
+                },
+                startSpeakingPlan: {
+                    ...VAPI_START_SPEAKING_PLAN,
+                    customEndpointingRules: [
+                        ...VAPI_START_SPEAKING_PLAN.customEndpointingRules,
+                    ],
                 },
                 // Research sessions keep transcripts and metrics, but no audio
                 // recording is created or exposed.

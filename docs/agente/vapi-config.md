@@ -77,14 +77,16 @@ aquí y se reporta como parte del stack:
 
 ## Transcriber (STT)
 
-| Campo | Valor |
-|---|---|
-| Provider | `deepgram` |
-| Model | `nova-2` |
-| Language | **`es`** |
-| Smart format | `true` |
+| Campo | Valor | Fuente en el repo |
+|---|---|---|
+| Provider | `deepgram` | `lib/constants.ts` → `VAPI_SPANISH_TRANSCRIBER` |
+| Model | `nova-2` | `lib/constants.ts` → `VAPI_SPANISH_TRANSCRIBER` |
+| Language | **`es`** | `lib/constants.ts` → `VAPI_SPANISH_TRANSCRIBER` |
+| Smart format | `true` | `lib/constants.ts` → `VAPI_SPANISH_TRANSCRIBER` |
+| Endpointing | `300 ms` | `lib/constants.ts` → `VAPI_SPANISH_TRANSCRIBER` |
 
-El `language: "es"` explícito es un requisito de la investigación (ítem #11, restricción declarada:
+La aplicación sobrescribe también el transcriber en cada llamada. El `language: "es"`
+explícito es un requisito de la investigación (ítem #11, restricción declarada:
 el sistema opera solo en español). Dejarlo en autodetección degrada la transcripción en
 español peruano y permite que una frase en inglés desvíe el idioma de toda la sesión.
 
@@ -94,15 +96,14 @@ español peruano y permite que una frase en inglés desvíe el idioma de toda la
 
 | Campo | Valor | Fuente en el repo |
 |---|---|---|
-| Provider | `vapi` | `hooks/useVapi.ts` |
-| Voice ID | `Emma` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
-| Versión | `2` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
-| Idioma | `es` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
-| Carácter declarado por Vapi | Natural y amigable | catálogo oficial de Vapi Voices |
+| Provider | `azure` | `hooks/useVapi.ts` |
+| Voice ID | `es-PE-CamilaNeural` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
+| Idioma | Español de Perú (`es-PE`, definido por la voz) | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
+| Característica | Voz femenina peruana | catálogo oficial de Azure Speech |
 
 La aplicación **sobrescribe la voz en cada llamada**, por lo que la voz guardada en el
-dashboard no decide la voz efectiva. `Emma` es una voz propia de Vapi y no requiere una
-cuenta, clave ni suscripción separada de ElevenLabs. Esto elimina el punto de falla de una
+dashboard no decide la voz efectiva. `Camila` usa la integración predeterminada de Azure en
+Vapi y no requiere una clave separada de Azure ni de ElevenLabs. Esto elimina el punto de falla de una
 credencial externa, pero no vuelve gratuita la llamada: el hosting, STT, LLM y TTS siguen
 consumiendo el saldo de Vapi.
 
@@ -124,15 +125,31 @@ audio es Vapi, así que la credencial debe conectarse en el dashboard de Vapi.
 
 ## Turn-taking y tiempos
 
-Réplica exacta de `VAPI_DASHBOARD_CONFIG` en `lib/constants.ts`. Esa constante no se envía a
-Vapi por código: es documentación del repo y **debe pegarse a mano aquí**.
+`startSpeakingPlan` se envía desde código en cada llamada mediante
+`VAPI_START_SPEAKING_PLAN`; por tanto, prevalece sobre el dashboard. La espera conservadora
+evita que una pausa normal del estudiante se interprete como final de respuesta.
 
 ```json
 {
   "startSpeakingPlan": {
-    "smartEndpointingEnabled": true,
-    "waitSeconds": 0.4
-  },
+    "waitSeconds": 0.8,
+    "customEndpointingRules": [
+      { "type": "customer", "regex": ".+", "timeoutSeconds": 2.5 }
+    ],
+    "transcriptionEndpointingPlan": {
+      "onPunctuationSeconds": 1.5,
+      "onNoPunctuationSeconds": 2.5,
+      "onNumberSeconds": 1.5
+    }
+  }
+}
+```
+
+El resto sigue en `VAPI_DASHBOARD_CONFIG` como referencia de lo que debe configurarse en el
+dashboard:
+
+```json
+{
   "stopSpeakingPlan": {
     "numWords": 2,
     "voiceSeconds": 0.2,
@@ -148,8 +165,9 @@ Vapi por código: es documentación del repo y **debe pegarse a mano aquí**.
 ```
 
 Estos valores condicionan la métrica **LP** y la **latencia de respuesta verbal del
-estudiante**: `responseDelaySeconds` y `waitSeconds` se suman a la latencia del sistema que
-mide `hooks/useVapi.ts`. Si se cambian, hay que reportar el cambio junto con las mediciones.
+estudiante**. Además, `hooks/useVapi.ts` consolida los eventos `final` consecutivos del mismo
+hablante en una sola fila de `session_turns`; un fragmento del STT no cuenta como respuesta.
+Si estos valores cambian, hay que reportar el cambio junto con las mediciones.
 
 ---
 
@@ -225,9 +243,10 @@ propiedades van en `required` para que el modelo no las omita.
 |---|---|---|
 | System prompt | `lib/agent-prompt.ts` | Fuente de verdad versionada; se envía como override en cada llamada |
 | Modelo y sus parámetros | `lib/constants.ts` (`EVALUATOR_MODEL`) | Se reportan en la investigación; viajan con el override |
+| Transcriber efectivo | `hooks/useVapi.ts` + `lib/constants.ts` | Deepgram Nova 2 fijado a español (`es`) |
 | `firstMessage` | `lib/difficulty/levels.ts` | Depende del nivel; interpola el título real de la investigación |
 | Nivel de exigencia | `lib/difficulty/levels.ts` | Bloque `{{levelDirectives}}` del prompt + temperatura; se guarda en `voice_sessions` |
-| Voz efectiva | `hooks/useVapi.ts` + `lib/constants.ts` | `Emma` V2, voz nativa de Vapi fijada a español |
+| Voz efectiva | `hooks/useVapi.ts` + `lib/constants.ts` | `Camila`, voz de Azure en español peruano mediante Vapi |
 | `variableValues` | `hooks/useVapi.ts` | `title`, `author`, `bookId`, `sessionId` |
 | Límite de duración | `hooks/useVapi.ts` (`maxDurationSeconds`) | Depende del plan del usuario |
 
@@ -237,8 +256,8 @@ propiedades van en `required` para que el modelo no las omita.
 
 - [ ] ~~System prompt pegado íntegro~~ → ya no aplica: lo envía la aplicación desde `lib/agent-prompt.ts`
 - [ ] ~~Model provider/model/temperature/maxTokens~~ → ya no aplica: los envía `EVALUATOR_MODEL`
-- [ ] Transcriber con `language: "es"`
-- [ ] La sesión de prueba usa `Emma` V2 y pronuncia el texto en español correctamente
+- [ ] La llamada efectiva muestra transcriber Deepgram Nova 2 con `language: "es"`
+- [ ] La sesión de prueba usa `es-PE-CamilaNeural` y pronuncia el texto en español correctamente
 - [ ] Bloque de turn-taking pegado tal cual
 - [ ] Tool `searchBook` con los **tres** parámetros requeridos, `sessionId` incluido
 - [ ] Server URL apuntando al entorno correcto y `GET` respondiendo `{"status":"ok"}`

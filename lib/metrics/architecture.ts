@@ -66,7 +66,7 @@ export const ARCHITECTURE_COMPONENTS: readonly ArchitectureComponent[] = [
     {
         id: 'tts',
         name: 'Síntesis de voz (TTS)',
-        implementation: 'Vapi Voices V2, voz Emma fijada a español (es)',
+        implementation: 'Azure Speech mediante Vapi, voz Camila fijada a español de Perú (es-PE)',
         evidence: ['lib/constants.ts', 'docs/agente/vapi-config.md'],
         integrated: true,
         runsOn: 'vapi',

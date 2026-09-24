@@ -46,6 +46,7 @@ import type {
     SessionPreparationResult,
     StartSessionInput,
     StartSessionResult,
+    UpdateTurnInput,
 } from '@/types';
 
 /**
@@ -398,6 +399,51 @@ export const saveSessionTurn = async (input: SaveTurnInput): Promise<SaveTurnRes
     } catch (e) {
         console.error('Error saving session turn', e);
         return { success: false, error: 'Failed to save session turn.' };
+    }
+};
+
+/**
+ * Extends the most recent logical turn when Vapi emits one utterance as several
+ * final transcript chunks. Ownership is checked through the parent session.
+ */
+export const updateSessionTurn = async (input: UpdateTurnInput): Promise<SaveTurnResult> => {
+    try {
+        const user = await requireUser();
+        const content = input.content?.trim();
+        if (!input.turnId || !content) {
+            return { success: false, error: 'Missing turnId or content' };
+        }
+
+        const [ownedTurn] = await db
+            .select({ id: sessionTurns.id, role: sessionTurns.role })
+            .from(sessionTurns)
+            .innerJoin(voiceSessions, eq(voiceSessions.id, sessionTurns.sessionId))
+            .where(and(eq(sessionTurns.id, input.turnId), eq(voiceSessions.userId, user.id)))
+            .limit(1);
+
+        if (!ownedTurn) {
+            return { success: false, error: 'Session turn not found or unauthorized' };
+        }
+
+        const [turn] = await db
+            .update(sessionTurns)
+            .set({
+                content,
+                endedAt: new Date(input.endedAt),
+                maxPauseMs:
+                    ownedTurn.role === 'user' ? (input.maxPauseMs ?? null) : null,
+                topic:
+                    ownedTurn.role === 'assistant' ? classifyQuestionTopicId(content) : null,
+            })
+            .where(eq(sessionTurns.id, input.turnId))
+            .returning({ id: sessionTurns.id });
+
+        return turn
+            ? { success: true, turnId: turn.id }
+            : { success: false, error: 'Session turn not found' };
+    } catch (e) {
+        console.error('Error updating session turn', e);
+        return { success: false, error: 'Failed to update session turn.' };
     }
 };
 

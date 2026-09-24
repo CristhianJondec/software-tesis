@@ -182,3 +182,12 @@ export interface SaveTurnResult {
     turnId?: string;
     error?: string;
 }
+
+export interface UpdateTurnInput {
+    turnId: string;
+    content: string;
+    /** Epoch milliseconds. */
+    endedAt: number;
+    /** Only on student turns: longest gap between two consecutive partial transcripts. */
+    maxPauseMs?: number | null;
+}

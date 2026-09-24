@@ -45,7 +45,7 @@ archivo o configuración donde se verifica · estado.
 | LLM | (el que se documentó en el doc `02`) | `docs/agente/vapi-config.md` |
 | Base de datos vectorial | Postgres + pgvector, índice HNSW cosine | `database/schema/bookSegments.ts` |
 | Retriever | Búsqueda por distancia coseno con umbral | `lib/actions/book.actions.ts` |
-| TTS | Vapi Voices V2 (`Emma`, `es`) | `lib/constants.ts` |
+| TTS | Azure Speech mediante Vapi (`es-PE-CamilaNeural`) | `lib/constants.ts` |
 
 Cierra con el cálculo: `ICA = (5/5) × 100 = 100%`.
 

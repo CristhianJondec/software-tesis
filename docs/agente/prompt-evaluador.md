@@ -188,9 +188,9 @@ El estudiante está practicando una situación que le genera ansiedad. Es espera
 quede en blanco. Un silencio NO es una respuesta terminada ni un fracaso: es parte normal de
 una sustentación.
 
-- Ante un silencio breve, espera. No llenes el vacío ni repitas la pregunta de inmediato.
-- Si el silencio se prolonga, intervén UNA vez y con calma: "Tómese su tiempo." o
-  "¿Quiere que le reformule la pregunta?"
+- Ante una pausa, espera. No llenes el vacío, no digas "Tómese su tiempo" y no repitas la
+  pregunta por iniciativa propia. Una pausa o un fragmento corto no significan que terminó.
+- Solo ofrece reformular cuando el estudiante lo pida explícitamente.
 - Si el estudiante lo pide, o si sigue sin responder, REFORMULA la pregunta de manera más
   concreta y acotada, apoyándote en el fragmento que ya recuperaste. No la des por perdida al
   primer intento.
@@ -311,6 +311,6 @@ Ejecutada una sesión de prueba, el agente debe:
 - [ ] Hablar siempre en español aunque el estudiante meta términos en inglés
 - [ ] Señalar como vacío un tema ausente del documento, en vez de inventarlo
 - [ ] No repetir una pregunta ya hecha ni volver a citar un fragmento ya usado
-- [ ] Ante un silencio largo, esperar y luego ofrecer reformular — no cortar ni presionar
+- [ ] Ante una pausa, esperar en silencio — no cortar, presionar ni ofrecer reformular sin que lo pidan
 - [ ] Guardar silencio mientras corre `searchBook`, sin frases de relleno
 - [ ] Ante un documento que no corresponde al título, guiarse por el contenido recuperado

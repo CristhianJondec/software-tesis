@@ -65,23 +65,59 @@ export const VOICE_SETTINGS = {
     speed: 1.0, // Natural conversation speed
 };
 
-// Native Vapi TTS: no ElevenLabs account or credential is required. Emma V2 is
-// a friendly female voice; pinning Spanish prevents English auto-detection.
+// Azure TTS through Vapi's default integration: no Azure or ElevenLabs key is
+// required. Camila is a female Peruvian-Spanish voice, so language is fixed by
+// the voice ID instead of inferred from each chunk.
 export const VAPI_SPANISH_VOICE = {
-    voiceId: 'Emma',
-    version: '2',
-    language: 'es',
+    provider: 'azure',
+    voiceId: 'es-PE-CamilaNeural',
+    speed: 1,
+    chunkPlan: {
+        enabled: true,
+        formatPlan: {
+            // Vapi's generic formatter has a 2025 cutoff and may rewrite 2026
+            // before synthesis. Let the locale-specific Azure voice normalize
+            // dates and numbers directly in Peruvian Spanish.
+            enabled: false,
+        },
+    },
 } as const;
 
-// VAPI configuration for natural conversation
-// NOTE: These settings should be configured in the VAPI Dashboard for the assistant
-// They are kept here for reference and documentation purposes
-export const VAPI_DASHBOARD_CONFIG = {
-    // Turn-taking settings
-    startSpeakingPlan: {
-        smartEndpointingEnabled: true,
-        waitSeconds: 0.4,
+// Pin speech recognition to Spanish as well. Keeping this in the call override
+// prevents a stale dashboard language from affecting new deployments.
+export const VAPI_SPANISH_TRANSCRIBER = {
+    provider: 'deepgram',
+    model: 'nova-2',
+    language: 'es',
+    smartFormat: true,
+    // Deepgram recommends a longer endpoint for reliable short utterances; it
+    // also reduces premature final chunks around natural Spanish pauses.
+    endpointing: 300,
+} as const;
+
+// A defense answer often contains reflective pauses. This catch-all endpointing
+// rule keeps the student's turn open for 2.5 seconds after every transcript
+// update; waitSeconds then adds a short final buffer before assistant audio.
+// Sent from useVapi on every call, so it does not depend on dashboard drift.
+export const VAPI_START_SPEAKING_PLAN = {
+    waitSeconds: 0.8,
+    customEndpointingRules: [
+        {
+            type: 'customer',
+            regex: '.+',
+            timeoutSeconds: 2.5,
+        },
+    ],
+    transcriptionEndpointingPlan: {
+        onPunctuationSeconds: 1.5,
+        onNoPunctuationSeconds: 2.5,
+        onNumberSeconds: 1.5,
     },
+} as const;
+
+// Remaining Vapi configuration kept as a dashboard reference. The
+// startSpeakingPlan above is applied directly from code.
+export const VAPI_DASHBOARD_CONFIG = {
     stopSpeakingPlan: {
         numWords: 2,
         voiceSeconds: 0.2,

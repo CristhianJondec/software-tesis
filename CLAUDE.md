@@ -24,7 +24,7 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 - **Postgres + pgvector**, ORM **Drizzle** (`drizzle-kit generate` / `migrate`)
 - **Better Auth** (`lib/auth.ts`, `lib/session.ts`)
 - **Vapi Web SDK** (`@vapi-ai/web`) para voz — STT, LLM y TTS los orquesta Vapi
-- **Vapi Voices V2** para TTS en español (`Emma`, `es`); ElevenLabs queda como alternativa opcional
+- **Azure Speech mediante Vapi** para TTS nativo en español peruano (`es-PE-CamilaNeural`); ElevenLabs queda como alternativa opcional
 - **Gemini `gemini-embedding-001`** para embeddings, 768 dimensiones
 - **Cloudflare R2** para PDFs y portadas
 - Tailwind v4 + shadcn/ui + sonner (toasts)
