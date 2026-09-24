@@ -20,6 +20,7 @@ import type { SessionEvidenceData } from '@/lib/actions/progress.actions';
 const dateTimeFormatter = new Intl.DateTimeFormat('es-PE', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone: 'America/Lima',
 });
 
 function EvidenceItem({ item }: { item: Evidence }) {

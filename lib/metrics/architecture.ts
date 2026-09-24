@@ -66,7 +66,7 @@ export const ARCHITECTURE_COMPONENTS: readonly ArchitectureComponent[] = [
     {
         id: 'tts',
         name: 'Síntesis de voz (TTS)',
-        implementation: 'ElevenLabs a través de Vapi (eleven_turbo_v2_5)',
+        implementation: 'Vapi Voices V2, voz Emma fijada a español (es)',
         evidence: ['lib/constants.ts', 'docs/agente/vapi-config.md'],
         integrated: true,
         runsOn: 'vapi',

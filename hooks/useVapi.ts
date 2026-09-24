@@ -10,7 +10,7 @@ import {
     ASSISTANT_ID,
     EVALUATOR_MODEL,
     MAX_SESSION_DURATION_MINUTES,
-    VAPI_FALLBACK_VOICE,
+    VAPI_SPANISH_VOICE,
 } from '@/lib/constants';
 import { buildEvaluatorSystemPrompt } from '@/lib/agent-prompt';
 import {
@@ -459,9 +459,8 @@ export function useVapi(book: IBook) {
             // screen proposed, so the prompt and the stored row cannot disagree.
             const focusDirectives = buildFocusDirectives(result.focusTopics ?? []);
 
-            // Investfied currently exposes one voice only. The old ElevenLabs
-            // choices remain documented in constants.ts and VoiceSelector.tsx for
-            // the future multi-voice phase, but are deliberately not read here.
+            // Investfied currently exposes one voice only. It uses Vapi's native
+            // Latin American voice so no separate ElevenLabs credential is needed.
             const assistantOverrides = {
                 // The agent's behaviour is versioned in the repo, not in the Vapi
                 // dashboard. Vapi merges this override onto the assistant, so the
@@ -489,7 +488,9 @@ export function useVapi(book: IBook) {
                 },
                 voice: {
                     provider: 'vapi' as const,
-                    voiceId: VAPI_FALLBACK_VOICE.voiceId,
+                    voiceId: VAPI_SPANISH_VOICE.voiceId,
+                    version: VAPI_SPANISH_VOICE.version,
+                    language: VAPI_SPANISH_VOICE.language,
                 },
                 // Research sessions keep transcripts and metrics, but no audio
                 // recording is created or exposed.

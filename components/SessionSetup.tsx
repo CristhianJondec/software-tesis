@@ -33,7 +33,10 @@ interface SessionSetupProps {
     }) => void;
 }
 
-const dateFormatter = new Intl.DateTimeFormat('es-PE', { dateStyle: 'long' });
+const dateFormatter = new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'long',
+    timeZone: 'America/Lima',
+});
 
 function describeRules(level: (typeof ORDERED_DIFFICULTY_LEVELS)[number]): string {
     const time =

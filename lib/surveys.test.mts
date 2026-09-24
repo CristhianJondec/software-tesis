@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { SURVEY_INSTRUMENTS } from './surveys/catalog.ts';
 import { computeSurveyScore, validateSurveyAnswers } from './surveys/scoring.ts';
 import { buildSurveyProgress, type SurveyProgressResponse } from './surveys/progress.ts';
 
@@ -28,6 +29,17 @@ test('SUS applies odd/even contributions and stays in 0–100', () => {
 test('validation rejects missing and out-of-scale answers', () => {
     assert.throws(() => validateSurveyAnswers('SUS', answers(9, () => 3)), /10 preguntas/);
     assert.throws(() => validateSurveyAnswers('SUS', answers(10, (item) => item === 4 ? 6 : 3)), /escala/);
+});
+
+test('question help is brief and only points to existing questions', () => {
+    Object.values(SURVEY_INSTRUMENTS).forEach((instrument) => {
+        Object.entries(instrument.questionHelp ?? {}).forEach(([position, help]) => {
+            assert.ok(Number(position) >= 1 && Number(position) <= instrument.questions.length);
+            if (!help) return;
+            assert.ok(help.term.trim().length > 0);
+            assert.ok(help.explanation.trim().length > 0 && help.explanation.length <= 180);
+        });
+    });
 });
 
 function submitted(surveyType: string, phase: string): SurveyProgressResponse {

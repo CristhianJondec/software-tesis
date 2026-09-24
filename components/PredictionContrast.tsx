@@ -7,7 +7,10 @@ interface PredictionContrastProps {
     contrast: PredictionContrastData;
 }
 
-const dateFormatter = new Intl.DateTimeFormat('es-PE', { dateStyle: 'long' });
+const dateFormatter = new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'long',
+    timeZone: 'America/Lima',
+});
 
 /**
  * What the student predicted before the session, next to what the session

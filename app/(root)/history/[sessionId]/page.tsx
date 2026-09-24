@@ -37,6 +37,7 @@ export const dynamic = 'force-dynamic';
 const dateFormatter = new Intl.DateTimeFormat('es-PE', {
     dateStyle: 'long',
     timeStyle: 'short',
+    timeZone: 'America/Lima',
 });
 
 const numberFormatter = new Intl.NumberFormat('es-PE');
@@ -391,7 +392,11 @@ export default async function ConversationHistoryPage({
                                                 <td className="px-4 py-3 font-medium">
                                                     {turn.role === 'user' ? 'Estudiante' : 'Agente evaluador'}
                                                 </td>
-                                                <td className="px-4 py-3">{turn.startedAt.toLocaleTimeString('es-PE')}</td>
+                                                <td className="px-4 py-3">
+                                                    {turn.startedAt.toLocaleTimeString('es-PE', {
+                                                        timeZone: 'America/Lima',
+                                                    })}
+                                                </td>
                                                 <td className="px-4 py-3">{formatMilliseconds(turnDuration)}</td>
                                                 <td className="px-4 py-3">{formatMilliseconds(latency)}</td>
                                             </tr>

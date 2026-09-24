@@ -397,7 +397,7 @@
      VAPI CONTROLS COMPONENT
      =========================================== */
   .vapi-header-card {
-    @apply flex items-center gap-6 bg-[#f3e4c7] rounded-[14px] p-6 relative overflow-hidden;
+    @apply flex items-center gap-6 bg-[#f3e4c7] rounded-[14px] p-6 relative overflow-visible;
   }
   .vapi-compact-header {
     @apply flex items-center gap-2 bg-[#f3e4c7] rounded-[14px] p-3 mb-3;

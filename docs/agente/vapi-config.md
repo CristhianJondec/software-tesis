@@ -94,20 +94,31 @@ español peruano y permite que una frase en inglés desvíe el idioma de toda la
 
 | Campo | Valor | Fuente en el repo |
 |---|---|---|
-| Provider | `11labs` | — |
-| Model | `eleven_turbo_v2_5` | `hooks/useVapi.ts` |
-| Voice ID | según la voz elegida por el estudiante | `lib/constants.ts` → `voiceOptions` |
-| Voz por defecto | `rachel` → `21m00Tcm4TlvDq8ikWAM` | `lib/constants.ts` → `DEFAULT_VOICE` |
-| `stability` | `0.45` | `lib/constants.ts` → `VOICE_SETTINGS` |
-| `similarityBoost` | `0.75` | `lib/constants.ts` → `VOICE_SETTINGS` |
-| `style` | `0` | `lib/constants.ts` → `VOICE_SETTINGS` |
-| `useSpeakerBoost` | `true` | `lib/constants.ts` → `VOICE_SETTINGS` |
-| `speed` | `1.0` | `lib/constants.ts` → `VOICE_SETTINGS` |
+| Provider | `vapi` | `hooks/useVapi.ts` |
+| Voice ID | `Emma` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
+| Versión | `2` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
+| Idioma | `es` | `lib/constants.ts` → `VAPI_SPANISH_VOICE` |
+| Carácter declarado por Vapi | Natural y amigable | catálogo oficial de Vapi Voices |
 
-La voz del dashboard es solo el valor por defecto: cuando
-`NEXT_PUBLIC_ELEVENLABS_ENABLED === 'true'`, la aplicación **sobrescribe la voz en cada
-llamada** con la que el estudiante seleccionó para su documento (`book.persona`). Los IDs de
-voz de `lib/constants.ts` no deben cambiarse.
+La aplicación **sobrescribe la voz en cada llamada**, por lo que la voz guardada en el
+dashboard no decide la voz efectiva. `Emma` es una voz propia de Vapi y no requiere una
+cuenta, clave ni suscripción separada de ElevenLabs. Esto elimina el punto de falla de una
+credencial externa, pero no vuelve gratuita la llamada: el hosting, STT, LLM y TTS siguen
+consumiendo el saldo de Vapi.
+
+### Si se decide usar ElevenLabs más adelante
+
+1. Crear la cuenta y una API key en ElevenLabs. El plan gratuito sirve para probar, tiene
+   créditos limitados y no incluye licencia comercial.
+2. En Vapi abrir **Integrations → ElevenLabs**, conectar la API key y asignarle una cuota para
+   limitar gasto. Vapi necesita acceso a los endpoints de texto a voz y listado de voces.
+3. Elegir en ElevenLabs Voice Library una voz grabada originalmente en español; el texto
+   determina el idioma, pero la muestra original determina en gran medida el acento.
+4. Cambiar el override de `hooks/useVapi.ts` a `provider: '11labs'`, el `voiceId` elegido y un
+   modelo multilingüe de baja latencia, y ejecutar una sesión completa de prueba.
+
+No basta con pegar `ELEVENLABS_API_KEY` en el `.env` de esta aplicación: quien sintetiza el
+audio es Vapi, así que la credencial debe conectarse en el dashboard de Vapi.
 
 ---
 
@@ -216,7 +227,7 @@ propiedades van en `required` para que el modelo no las omita.
 | Modelo y sus parámetros | `lib/constants.ts` (`EVALUATOR_MODEL`) | Se reportan en la investigación; viajan con el override |
 | `firstMessage` | `lib/difficulty/levels.ts` | Depende del nivel; interpola el título real de la investigación |
 | Nivel de exigencia | `lib/difficulty/levels.ts` | Bloque `{{levelDirectives}}` del prompt + temperatura; se guarda en `voice_sessions` |
-| Voz efectiva | `hooks/useVapi.ts` + `lib/constants.ts` | La elige el estudiante por documento |
+| Voz efectiva | `hooks/useVapi.ts` + `lib/constants.ts` | `Emma` V2, voz nativa de Vapi fijada a español |
 | `variableValues` | `hooks/useVapi.ts` | `title`, `author`, `bookId`, `sessionId` |
 | Límite de duración | `hooks/useVapi.ts` (`maxDurationSeconds`) | Depende del plan del usuario |
 
@@ -227,7 +238,7 @@ propiedades van en `required` para que el modelo no las omita.
 - [ ] ~~System prompt pegado íntegro~~ → ya no aplica: lo envía la aplicación desde `lib/agent-prompt.ts`
 - [ ] ~~Model provider/model/temperature/maxTokens~~ → ya no aplica: los envía `EVALUATOR_MODEL`
 - [ ] Transcriber con `language: "es"`
-- [ ] Voz por defecto y parámetros de ElevenLabs según la tabla **Voice**
+- [ ] La sesión de prueba usa `Emma` V2 y pronuncia el texto en español correctamente
 - [ ] Bloque de turn-taking pegado tal cual
 - [ ] Tool `searchBook` con los **tres** parámetros requeridos, `sessionId` incluido
 - [ ] Server URL apuntando al entorno correcto y `GET` respondiendo `{"status":"ok"}`

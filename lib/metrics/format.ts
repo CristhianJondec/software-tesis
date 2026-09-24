@@ -66,14 +66,18 @@ export function formatDuration(seconds: number | null | undefined): string {
     return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
-/** "2026-09-03 14:05 UTC" — same string on the server and in the browser. */
+/** Peru civil time, deterministic on the server and in the browser. */
 export function formatDateTime(date: Date | string | null | undefined): string {
     if (!date) return EMPTY_VALUE;
     const parsed = date instanceof Date ? date : new Date(date);
     if (Number.isNaN(parsed.getTime())) return EMPTY_VALUE;
 
-    const iso = parsed.toISOString();
-    return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+    return new Intl.DateTimeFormat('es-PE', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+        timeZone: 'America/Lima',
+        hourCycle: 'h23',
+    }).format(parsed);
 }
 
 /** Trims a transcript for a table cell without cutting a word in half. */

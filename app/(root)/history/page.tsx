@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 const dateFormatter = new Intl.DateTimeFormat('es-PE', {
     dateStyle: 'long',
     timeStyle: 'short',
+    timeZone: 'America/Lima',
 });
 
 export default async function HistoryPage({

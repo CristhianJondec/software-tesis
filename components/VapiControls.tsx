@@ -78,7 +78,7 @@ const VapiControls = ({
         <>
             <div className="max-w-4xl mx-auto flex flex-col gap-8">
                 {/* Header Card */}
-                <div className="vapi-header-card">
+                <div className="vapi-header-card z-30">
                     <div className="vapi-cover-wrapper">
                         <Image
                             src={`/api/cover/${book.id}`}
@@ -203,7 +203,7 @@ const VapiControls = ({
                                 {showRequirements && (
                                     <div
                                         role="tooltip"
-                                        className="absolute left-0 top-full z-10 mt-2 w-64 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-950 shadow-lg"
+                                        className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-950 shadow-lg"
                                     >
                                         <p className="font-semibold">Antes de iniciar la conversación</p>
                                         <p className="mt-1">

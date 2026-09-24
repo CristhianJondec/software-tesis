@@ -65,19 +65,12 @@ export const VOICE_SETTINGS = {
     speed: 1.0, // Natural conversation speed
 };
 
-// Fallback TTS used while ElevenLabs is not connected in the Vapi dashboard.
-// Vapi's own voice provider ships with the platform and needs no third-party
-// credential, so the call cannot fail with assistant.voice.requestFailed.
-// When multi-voice support returns, restore the ElevenLabs override in useVapi
-// and connect its credential in Vapi before exposing VoiceSelector again.
-// NOTE: no `language` field on purpose. Vapi rejected es-MX with
-// `unsupported_language`: the language list in the SDK types covers every voice
-// provider, not what this particular voice supports. Without the field the voice
-// falls back to its default and still reads the Spanish text — with an anglophone
-// accent. That is acceptable for a smoke test, NOT for the study sessions:
-// connect ElevenLabs (or another Spanish TTS) before running them.
-export const VAPI_FALLBACK_VOICE = {
-    voiceId: 'Clara',
+// Native Vapi TTS: no ElevenLabs account or credential is required. Emma V2 is
+// a friendly female voice; pinning Spanish prevents English auto-detection.
+export const VAPI_SPANISH_VOICE = {
+    voiceId: 'Emma',
+    version: '2',
+    language: 'es',
 } as const;
 
 // VAPI configuration for natural conversation

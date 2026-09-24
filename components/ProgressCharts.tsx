@@ -21,7 +21,10 @@ const CHART_WIDTH = 520;
 const CHART_HEIGHT = 160;
 const PADDING = { top: 16, right: 16, bottom: 28, left: 16 };
 
-const dateFormatter = new Intl.DateTimeFormat('es-PE', { dateStyle: 'short' });
+const dateFormatter = new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'short',
+    timeZone: 'America/Lima',
+});
 
 interface Plotted {
     x: number;

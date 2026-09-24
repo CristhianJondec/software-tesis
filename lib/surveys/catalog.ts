@@ -2,11 +2,18 @@ export type SurveyType = 'STAI' | 'PRCS12' | 'SUS';
 export type SurveyPhase = 'T1' | 'T2' | 'UNICA';
 export type SurveyStageId = 'stai-t1' | 'prcs12-t1' | 'sus' | 'stai-t2' | 'prcs12-t2';
 
+export interface SurveyQuestionHelp {
+    term: string;
+    explanation: string;
+}
+
 export interface SurveyInstrument {
     type: SurveyType;
     scoreLabel: 'AE' | 'AC' | 'SUS';
     instructions: string;
     questions: readonly string[];
+    /** Optional, neutral clarification keyed by the question's 1-based position. */
+    questionHelp?: Readonly<Partial<Record<number, SurveyQuestionHelp>>>;
     options: readonly { value: number; label: string }[];
 }
 
@@ -52,6 +59,28 @@ export const SURVEY_INSTRUMENTS: Record<SurveyType, SurveyInstrument> = {
             'Me siento alegre',
             'En este momento me siento bien',
         ],
+        questionHelp: {
+            4: {
+                term: 'Contrariado',
+                explanation: 'Sentirse molesto o disgustado porque algo no salió como esperabas. Por ejemplo, cuando un problema inesperado te fastidia.',
+            },
+            9: {
+                term: 'Angustiado',
+                explanation: 'Sentirse muy intranquilo o afligido, con una sensación difícil de aliviar en ese momento.',
+            },
+            13: {
+                term: 'Desasosegado',
+                explanation: 'Sentirse intranquilo, inquieto o sin poder estar en calma.',
+            },
+            14: {
+                term: '«Atado» u oprimido',
+                explanation: 'Sentirse limitado o bajo presión, como si costara actuar con libertad.',
+            },
+            18: {
+                term: 'Aturdido y sobreexcitado',
+                explanation: 'Sentirse abrumado y demasiado activado, hasta el punto de que puede costar pensar con claridad.',
+            },
+        },
     },
     PRCS12: {
         type: 'PRCS12',
@@ -79,6 +108,28 @@ export const SURVEY_INSTRUMENTS: Record<SurveyType, SurveyInstrument> = {
             'Tengo miedo y estoy tenso(a) todo el tiempo que estoy hablando delante de un grupo de gente',
             'Me siento aterrorizado(a) ante la idea de hablar delante de un grupo de personas',
         ],
+        questionHelp: {
+            2: {
+                term: 'Auditorio',
+                explanation: 'El grupo de personas que te escucha mientras expones o das una charla.',
+            },
+            4: {
+                term: 'La perspectiva de dar una charla',
+                explanation: 'La idea o posibilidad de tener que dar una charla próximamente.',
+            },
+            5: {
+                term: 'Estar en posesión de mí mismo(a)',
+                explanation: 'Mantener el control de tus pensamientos, palabras y acciones mientras hablas.',
+            },
+            6: {
+                term: 'Tarima',
+                explanation: 'El lugar o espacio desde el que expones frente a otras personas.',
+            },
+            10: {
+                term: 'Postura forzada',
+                explanation: 'Una posición o unos movimientos del cuerpo que se sienten rígidos o poco naturales.',
+            },
+        },
     },
     SUS: {
         type: 'SUS',
@@ -103,6 +154,16 @@ export const SURVEY_INSTRUMENTS: Record<SurveyType, SurveyInstrument> = {
             'Me sentí muy seguro(a) usando el sistema.',
             'Necesité aprender muchas cosas antes de poder empezar a usar este sistema.',
         ],
+        questionHelp: {
+            5: {
+                term: 'Funciones bien integradas',
+                explanation: 'Que las distintas partes del sistema se conectan y trabajan juntas de manera coherente.',
+            },
+            6: {
+                term: 'Inconsistencia',
+                explanation: 'Que algunas partes del sistema se comportan de forma distinta o poco coherente en situaciones parecidas.',
+            },
+        },
     },
 };
 

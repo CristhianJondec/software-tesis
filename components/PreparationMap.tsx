@@ -65,10 +65,14 @@ const REVIEW_REASON_COPY: Record<ReviewReason, string> = {
     unevaluated: 'Respondiste, pero esta respuesta todavía no está evaluada',
 };
 
-const dateFormatter = new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' });
+const dateFormatter = new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'medium',
+    timeZone: 'America/Lima',
+});
 const dateTimeFormatter = new Intl.DateTimeFormat('es-PE', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone: 'America/Lima',
 });
 
 function describePages(pages: number[]): string {
