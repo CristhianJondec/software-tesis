@@ -2,15 +2,14 @@ import { BookOpenCheck, Download, FileText, ListChecks } from 'lucide-react';
 
 import { listStudyMaterials } from '@/lib/actions/material.actions';
 import { GUIDE_INTRO, GUIDE_SECTIONS, TOPIC_GUIDE } from '@/lib/materials/guide';
-import { guardParticipantPage } from '@/lib/study/access';
+import { guardMaterialsPage } from '@/lib/study/access';
 
 export const metadata = { title: 'Materiales — Investfied' };
 export const dynamic = 'force-dynamic';
 
 /**
- * The preparation dossier. Reachable by both arms of the study: it is the ONLY
- * content screen the control arm has, and the experimental arm keeps it so the
- * two groups differ in the intervention, not in the reading material.
+ * The preparation dossier. It is the control arm's content screen and is not
+ * available to experimental participants.
  */
 function formatSize(bytes: number): string {
     const mb = bytes / (1024 * 1024);
@@ -18,7 +17,7 @@ function formatSize(bytes: number): string {
 }
 
 export default async function MaterialsPage() {
-    await guardParticipantPage();
+    await guardMaterialsPage();
 
     const materialsResult = await listStudyMaterials();
     const materials = materialsResult.success ? materialsResult.data ?? [] : [];

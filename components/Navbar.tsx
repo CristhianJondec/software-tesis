@@ -22,6 +22,8 @@ interface NavbarProps {
     studyGroup?: StudyGroup | null;
     /** Researchers and the experimental arm. The control arm never sees the agent. */
     hasInterventionAccess?: boolean;
+    /** Researchers and the control arm. Experimental participants do not see materials. */
+    hasMaterialsAccess?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ const Navbar = ({
     showAdmin = false,
     studyGroup = null,
     hasInterventionAccess = false,
+    hasMaterialsAccess = false,
 }: NavbarProps) => {
     const pathName = usePathname();
     const router = useRouter();
@@ -87,15 +90,17 @@ const Navbar = ({
 
                     {isParticipant && (
                         <>
-                            <Link
-                                href="/materiales"
-                                className={cn(
-                                    'nav-link-base',
-                                    pathName.startsWith('/materiales') ? 'nav-link-active' : 'text-black hover:opacity-70',
-                                )}
-                            >
-                                Materiales
-                            </Link>
+                            {hasMaterialsAccess && (
+                                <Link
+                                    href="/materiales"
+                                    className={cn(
+                                        'nav-link-base',
+                                        pathName.startsWith('/materiales') ? 'nav-link-active' : 'text-black hover:opacity-70',
+                                    )}
+                                >
+                                    Materiales
+                                </Link>
+                            )}
                             <Link
                                 href="/surveys"
                                 className={cn(

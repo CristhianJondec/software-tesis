@@ -53,7 +53,7 @@ comparación contra la práctica habitual, no contra una versión degradada del 
 | Biblioteca, subir investigación, sesión de voz | Sí | No |
 | Historial, mapa de preparación, progreso | Sí | No |
 | Encuestas (`/surveys`) | Sí | Sí, sin SUS |
-| Materiales (`/materiales`) | Sí | Sí |
+| Materiales (`/materiales`) | No | Sí |
 
 - **Un solo punto de decisión:** `lib/study/groups.ts` (reglas puras) y
   `lib/study/access.ts` (guardas de servidor). Ningún `if` de grupo fuera de ahí.
@@ -63,13 +63,12 @@ comparación contra la práctica habitual, no contra una versión degradada del 
 - **La asignación es del investigador.** Se hace en `/admin` con
   `setParticipantStudyGroup`, nunca desde una pantalla del participante: el protocolo
   prohíbe que el estudiante sepa o elija su grupo.
-- **El material del control está emparejado en contenido.** `lib/materials/guide.ts` se
+- **El material del control está alineado en contenido.** `lib/materials/guide.ts` se
   construye sobre `PREPARATION_TOPICS`, los mismos 12 temas sobre los que el agente
-  examina al grupo experimental. Lo que cambia entre grupos es la *entrega* (leer vs.
-  sustentar en voz alta), no la materia. Sin ese emparejamiento, una diferencia entre
-  grupos podría explicarse por "el experimental recibió más información".
-- **Los PDF compartidos** se suben desde `/admin` (tabla `study_materials`, R2) y los ven
-  los dos grupos.
+  examina al grupo experimental. La vista escrita pertenece solo al control; el
+  experimental trabaja esos temas mediante el agente y su propia investigación.
+- **Los PDF del control** se suben desde `/admin` (tabla `study_materials`, R2) y solo
+  los ven el grupo control y los investigadores.
 - Los investigadores (`ADMIN_EMAIL`, `METRICS_OWNER_EMAILS`) pasan por encima de la
   restricción: si no, quien asigna los grupos quedaría fuera del panel donde se asignan.
 

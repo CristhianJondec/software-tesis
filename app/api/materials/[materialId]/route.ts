@@ -10,15 +10,15 @@ import { getStudyContext } from '@/lib/study/access';
  * Serves a dossier PDF from R2.
  *
  * Unlike /api/cover, this is not ownership-scoped — the dossier is shared by the
- * whole study — but it still requires an ASSIGNED participant, so the bucket key
- * is never reachable by an account the researcher has not admitted yet.
+ * control group — but it still requires control/researcher access, so the bucket
+ * key is never reachable by an experimental or unassigned participant.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ materialId: string }> }) {
     const context = await getStudyContext();
     if (!context) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!context.group && !context.isResearcher) {
+    if (!context.hasMaterialsAccess) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

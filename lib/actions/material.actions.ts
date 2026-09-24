@@ -38,8 +38,8 @@ async function readMaterials(): Promise<StudyMaterialRow[]> {
 }
 
 /**
- * The shared dossier, readable by any assigned participant of either arm.
- * Not ownership-scoped: it is one set of documents for the whole study.
+ * The shared dossier, readable by the control arm and researchers.
+ * Not ownership-scoped: it is one set of documents for the control group.
  */
 export const listStudyMaterials = async (): Promise<{
     success: boolean;
@@ -49,8 +49,13 @@ export const listStudyMaterials = async (): Promise<{
     try {
         const context = await getStudyContext();
         if (!context) return { success: false, error: 'Inicia sesión para ver los materiales.' };
-        if (!context.group && !context.isResearcher) {
-            return { success: false, error: 'Tu cuenta todavía no tiene un grupo asignado.' };
+        if (!context.hasMaterialsAccess) {
+            return {
+                success: false,
+                error: context.group === 'experimental'
+                    ? 'Los materiales no están disponibles para el grupo experimental.'
+                    : 'Tu cuenta todavía no tiene un grupo asignado.',
+            };
         }
 
         return { success: true, data: await readMaterials() };

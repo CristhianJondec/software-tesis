@@ -52,6 +52,7 @@ export default async function RootLayout({
           showAdmin={adminAccess.allowed}
           studyGroup={studyContext?.group ?? null}
           hasInterventionAccess={studyContext?.hasInterventionAccess ?? false}
+          hasMaterialsAccess={studyContext?.hasMaterialsAccess ?? false}
         />
         {children}
         <Toaster />

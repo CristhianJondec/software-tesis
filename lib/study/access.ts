@@ -28,6 +28,8 @@ export interface StudyContext {
     isResearcher: boolean;
     /** Researchers and the experimental arm. The control arm is false. */
     hasInterventionAccess: boolean;
+    /** Researchers and the control arm. Experimental participants are false. */
+    hasMaterialsAccess: boolean;
 }
 
 function isResearcherEmail(email: string): boolean {
@@ -57,6 +59,7 @@ export async function getStudyContext(): Promise<StudyContext | null> {
         group,
         isResearcher,
         hasInterventionAccess: isResearcher || group === 'experimental',
+        hasMaterialsAccess: isResearcher || group === 'control',
     };
 }
 
@@ -85,7 +88,7 @@ export async function redirectIfOutsideIntervention(): Promise<StudyContext | nu
 }
 
 /**
- * Guard for the screens both arms share (/surveys, /materiales). Only the
+ * Guard for the screens both arms share (currently /surveys). Only the
  * unassigned are turned away.
  */
 export async function guardParticipantPage(): Promise<StudyContext> {
@@ -93,6 +96,14 @@ export async function guardParticipantPage(): Promise<StudyContext> {
     if (!context) redirect('/sign-in');
     if (!context.group && !context.isResearcher) redirect('/sin-asignar');
     return context;
+}
+
+/** Guard for the control dossier. Experimental participants cannot open it. */
+export async function guardMaterialsPage(): Promise<StudyContext> {
+    const context = await getStudyContext();
+    if (!context) redirect('/sign-in');
+    if (context.hasMaterialsAccess) return context;
+    redirect(context.group === 'experimental' ? '/' : '/sin-asignar');
 }
 
 /**

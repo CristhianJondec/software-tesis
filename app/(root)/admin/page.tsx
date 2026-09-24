@@ -117,9 +117,8 @@ export default async function AdminPage() {
                 <div className="mb-4">
                     <h2 className="font-serif text-2xl font-bold">Materiales compartidos</h2>
                     <p className="subtitle mt-2 max-w-3xl">
-                        Documentos PDF que acompañan a la guía escrita en la vista <strong>Materiales</strong>. Los ven
-                        los dos grupos: es el material de preparación del grupo control y material de apoyo del
-                        experimental.
+                        Documentos PDF que acompañan a la guía escrita en la vista <strong>Materiales</strong> para el
+                        grupo control.
                     </p>
                 </div>
                 {!materialsResult.success && (

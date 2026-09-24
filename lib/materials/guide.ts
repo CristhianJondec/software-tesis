@@ -4,12 +4,9 @@ import { PREPARATION_TOPIC_IDS, PREPARATION_TOPICS, type PreparationTopicId } fr
  * Static preparation dossier for the control arm.
  *
  * It is deliberately keyed to `PREPARATION_TOPICS` — the SAME twelve sections
- * the agent examines the experimental arm on. That makes this a content-matched
- * control: both arms get the same subject matter, and the only difference
- * between them is the delivery (reading a dossier vs. defending it aloud
- * against an agent that reads your own document). Without that matching, a
- * difference between arms could be explained by "the experimental group simply
- * received more information", which is not the hypothesis under test.
+ * the agent examines the experimental arm on. The dossier is only exposed to
+ * the control arm; the experimental arm works through those topics with the
+ * voice agent and its own document.
  *
  * All student-facing strings are in Spanish.
  */

@@ -16,7 +16,7 @@ function formatSize(bytes: number): string {
     return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-/** Uploads the shared dossier PDFs shown on /materiales to both study arms. */
+/** Uploads the dossier PDFs shown on /materiales to the control arm. */
 export default function MaterialsManager({ materials }: { materials: StudyMaterialRow[] }) {
     const router = useRouter();
     const fileInput = useRef<HTMLInputElement>(null);
@@ -131,7 +131,7 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                     {isUploading ? 'Subiendo…' : 'Publicar material'}
                 </Button>
                 <p className="text-xs text-[var(--text-secondary)]">
-                    Lo ven todos los participantes de ambos grupos en la vista Materiales.
+                    Lo ven los participantes del grupo control en la vista Materiales.
                 </p>
             </form>
 
