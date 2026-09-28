@@ -27,7 +27,7 @@ Vapi Web SDK (@vapi-ai/web) en el navegador — hooks/useVapi.ts
 Vapi (plataforma externa)
    ├─ STT: Deepgram nova-2, language:"es" — configurado en el dashboard de Vapi,
    │        referencia versionada en docs/agente/vapi-config.md (no está en el repo)
-   ├─ LLM: OpenAI gpt-4o, temperature 0.4, maxTokens 250 — mismo lugar
+   ├─ LLM: OpenAI gpt-4o, temperature 0.4, maxTokens 250 (hoy 450, ver docs/agente/vapi-config.md) — mismo lugar
    │        └─ el LLM decide invocar el tool "searchBook" antes de preguntar
    │             │
    │             ▼
@@ -67,7 +67,7 @@ registro de turnos y latencias.
 | Framework | Next.js 16 (App Router) + React 19 + TypeScript | `next@16.1.6`, `react@19.2.3` | `package.json` |
 | Voz (orquestación) | Vapi Web SDK | `@vapi-ai/web@^2.7.0` | `package.json:20` |
 | STT | Deepgram (vía Vapi) | `nova-2`, `language: "es"` | `docs/agente/vapi-config.md:60-71` — **configurado en dashboard, no en código** |
-| LLM conversacional | OpenAI (vía Vapi) | `gpt-4o`, temp 0.4, maxTokens 250 | `docs/agente/vapi-config.md:29-38` — **configurado en dashboard, no en código** |
+| LLM conversacional | OpenAI (vía Vapi) | `gpt-4o`, temp 0.4, maxTokens 250 (hoy 450) | `docs/agente/vapi-config.md:29-38` — **configurado en dashboard, no en código** |
 | TTS declarado | ElevenLabs (vía Vapi) | `eleven_turbo_v2_5` | `docs/agente/vapi-config.md:75-92` |
 | TTS realmente activo hoy | Voz propia de Vapi (fallback) | `voiceId: 'Clara'` | `lib/constants.ts:52-65`, `hooks/useVapi.ts:362-375` |
 | Embeddings | Google Gemini | `gemini-embedding-001`, 768 dimensiones | `lib/embeddings.ts:11-13` |

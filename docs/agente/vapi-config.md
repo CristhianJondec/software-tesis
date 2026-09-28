@@ -35,7 +35,7 @@ El system prompt completo está en [`prompt-evaluador.md`](prompt-evaluador.md).
 | Provider | `openai` | `lib/constants.ts` → `EVALUATOR_MODEL` |
 | Model | `gpt-4o` | `lib/constants.ts` → `EVALUATOR_MODEL` |
 | Temperature | según el nivel: `0.3` / `0.4` / `0.5` / `0.6` | `lib/difficulty/levels.ts` → `DIFFICULTY_LEVELS[n].temperature` |
-| Max tokens | `250` | `lib/constants.ts` → `EVALUATOR_MODEL` |
+| Max tokens | `450` | `lib/constants.ts` → `EVALUATOR_MODEL` |
 | System prompt | el de [`prompt-evaluador.md`](prompt-evaluador.md), íntegro | `lib/agent-prompt.ts` |
 | Tools | `searchBook` (ver abajo) | **dashboard** |
 
@@ -65,8 +65,10 @@ aquí y se reporta como parte del stack:
   efectivo de cada sesión es reconstruible: `voice_sessions.difficulty_level` guarda el nivel.
 - `EVALUATOR_MODEL.temperature` (`0.4`) queda como valor por defecto del override y coincide
   con el nivel 2.
-- `maxTokens: 250` fuerza turnos cortos. Es la contención dura del "una pregunta a la vez";
-  el prompt lo pide, este límite lo garantiza.
+- `maxTokens: 450`. Antes era `250` y funcionaba como contención dura de turnos cortos, pero
+  cortaba a media frase el cierre y las explicaciones largas (unas 170–190 palabras en
+  español). Ahora el largo lo fija el prompt: 54 palabras por pregunta, 60 en otros turnos y
+  120 en el cierre. Este límite queda solo como red de seguridad.
 
 > **Verificar antes de reportar en la investigación:** confirma en el dashboard que el modelo
 > configurado hoy coincide con lo anotado aquí, y corrige este archivo si difiere. El nombre

@@ -27,7 +27,9 @@ export const EVALUATOR_MODEL = {
     provider: 'openai',
     model: 'gpt-4o',
     temperature: 0.4,
-    maxTokens: 250,
+    // Room for the closing and longer explanations without cutting them
+    // mid-sentence; turn length is governed by the prompt's word limits.
+    maxTokens: 450,
 } as const;
 
 // Voices for the evaluating professor, chosen by the student when uploading the

@@ -401,6 +401,15 @@ export function useVapi(book: IBook) {
                     return;
                 }
 
+                // Diagnostic only: tells an agent cut by student speech or noise
+                // (stopSpeakingPlan, dashboard) apart from one cut by maxTokens.
+                if (message.type === 'user-interrupted') {
+                    console.info('[vapi] agent interrupted by the student', {
+                        spokenSoFar: joinSpokenChunks(assistantChunksRef.current),
+                    });
+                    return;
+                }
+
                 if (message.type !== 'transcript') return;
 
                 // The student taking the floor closes the agent's intervention.
