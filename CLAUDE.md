@@ -24,7 +24,7 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 - **Postgres + pgvector**, ORM **Drizzle** (`drizzle-kit generate` / `migrate`)
 - **Better Auth** (`lib/auth.ts`, `lib/session.ts`)
 - **Vapi Web SDK** (`@vapi-ai/web`) para voz — STT, LLM y TTS los orquesta Vapi
-- **Azure Speech mediante Vapi** para TTS nativo en español peruano (`es-PE-CamilaNeural`); ElevenLabs queda como alternativa opcional
+- **Azure Speech mediante Vapi** para TTS nativo en español peruano (`es-PE-CamilaNeural` femenina o `es-PE-AlexNeural` masculina, elegida por el estudiante al subir la investigación y guardada en `books.persona`); ElevenLabs queda como alternativa opcional
 - **Gemini `gemini-embedding-001`** para embeddings, 768 dimensiones
 - **Cloudflare R2** para PDFs y portadas
 - Tailwind v4 + shadcn/ui + sonner (toasts)
@@ -47,10 +47,10 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 | Niveles de exposición gradual y regla de adaptación | `lib/difficulty/` (`levels.ts`, `signals.ts`, `adaptation.ts`) |
 | Informe post-sesión en 3 dimensiones (rúbrica, juez con cita, hechos) | `lib/feedback/` (`rubric.ts`, `evaluate.ts`, `observations.ts`, `cases.ts`, `report.ts`) |
 | Pantallas previa y de cierre de la sesión (escala 0–10) | `components/SessionSetup.tsx`, `components/PostSessionSurvey.tsx` |
-| Registro de predicciones y contraste con la evidencia de la sesión | `lib/prediction/` (`questions.ts`, `contrast.ts`) |
+| Registro de predicciones y contraste con la evidencia de la sesión (**oculto en la UI**: la lógica y las tablas siguen, pero ninguna pantalla lo muestra ni lo pide) | `lib/prediction/` (`questions.ts`, `contrast.ts`), `components/PredictionContrast.tsx` |
 | Mapa de preparación: taxonomía, clasificador, cobertura, 4 estados y sesión enfocada | `lib/preparation/` (`topics.ts`, `classify.ts`, `coverage.ts`, `compute.ts`, `status.ts`, `map.ts`, `focus.ts`) |
-| Vista del mapa de preparación | `app/(root)/preparacion/page.tsx`, `components/PreparationMap.tsx` |
-| Evidencias de avance entre sesiones y cierre hablado por el agente | `lib/progress/` (`summary.ts`, `evidence.ts`, `series.ts`, `closing.ts`) |
+| Vista del mapa de preparación (**oculta**: `/preparacion` redirige a `/` y no hay enlaces; la lógica de `lib/preparation/` sigue en uso) | `app/(root)/preparacion/page.tsx`, `components/PreparationMap.tsx` |
+| Evidencias de avance entre sesiones (se muestran por escrito en el modal de cierre; el agente ya **no** las lee en voz alta y `closing.ts` queda sin uso) | `lib/progress/` (`summary.ts`, `evidence.ts`, `series.ts`, `closing.ts`) |
 | Vista de progreso longitudinal | `app/(root)/progreso/page.tsx`, `components/ProgressCharts.tsx`, `components/ProgressEvidence.tsx` |
 | Roles del estudio (experimental / control) y control de acceso | `lib/study/` (`groups.ts`, `access.ts`) |
 | Vista de materiales del grupo control | `app/(root)/materiales/page.tsx`, `lib/materials/guide.ts` |
@@ -70,7 +70,13 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 3. La ruta ejecuta `searchBookSegments()`: embebe la consulta y busca por distancia coseno
    en `book_segments` (índice HNSW).
 4. Los eventos de Vapi (`speech-start`, `speech-end`, `message`) actualizan el estado y la
-   transcripción en vivo en `useVapi.ts`.
+   transcripción en vivo en `useVapi.ts`. El texto del agente sale de los mensajes
+   `voice-input` (el texto literal enviado al TTS), no de sus `transcript`, que son una
+   retranscripción del audio y deforman términos en inglés. El turno del agente se cierra y
+   se guarda cuando el estudiante empieza a hablar o termina la llamada.
+5. Colgar corta la llamada de inmediato. El resumen de la sesión (evidencias de
+   `lib/progress/evidence.ts`) se muestra por escrito en `PostSessionSurvey`, y al guardar
+   la autoevaluación final el estudiante va directo al informe (`/history/[id]#informe`).
 
 **El system prompt y el modelo del agente viven en el repo** y se envían en cada llamada como
 `assistantOverrides` (`lib/agent-prompt.ts` + `EVALUATOR_MODEL` en `lib/constants.ts`). Lo que

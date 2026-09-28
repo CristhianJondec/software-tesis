@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Info, Loader2, NotebookPen, Play, Sparkles, Target } from 'lucide-react';
+import { Info, Loader2, Play, Sparkles, Target } from 'lucide-react';
 
 import AnxietyScale from '@/components/AnxietyScale';
 import { getSessionPreparation } from '@/lib/actions/session.actions';
@@ -12,12 +12,6 @@ import {
 } from '@/lib/difficulty/levels';
 import { describeFocusTopics } from '@/lib/preparation/focus';
 import type { PreparationTopicId } from '@/lib/preparation/topics';
-import {
-    MAX_PREDICTION_CHARS,
-    ORDERED_PREDICTION_QUESTIONS,
-    type PredictionAnswers,
-    type PredictionQuestionId,
-} from '@/lib/prediction/questions';
 import type { SessionPreparation } from '@/types';
 
 interface SessionSetupProps {
@@ -29,7 +23,6 @@ interface SessionSetupProps {
         difficultyLevel: DifficultyLevelId;
         preSessionAnxiety: number | null;
         focusTopics: PreparationTopicId[];
-        prediction: PredictionAnswers;
     }) => void;
 }
 
@@ -66,12 +59,6 @@ export default function SessionSetup({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [anxiety, setAnxiety] = useState<number | null>(null);
     const [chosenLevel, setChosenLevel] = useState<DifficultyLevelId | null>(null);
-    // The three written predictions (docs/propuestas/04). All optional: nothing
-    // here may block the start button.
-    const [prediction, setPrediction] = useState<PredictionAnswers>({});
-
-    const setAnswer = (id: PredictionQuestionId, value: string) =>
-        setPrediction((current) => ({ ...current, [id]: value }));
 
     useEffect(() => {
         let cancelled = false;
@@ -138,18 +125,6 @@ export default function SessionSetup({
                 Tu respuesta define con qué nivel de exigencia arranca el simulacro. Puedes cambiarlo
                 tú mismo más abajo.
             </p>
-
-            {preparation?.previousStrategy && (
-                <div className="mt-4 rounded-xl border border-[#d6dbe8] bg-[#f4f6fb] p-4">
-                    <p className="flex items-start gap-2 text-sm text-[#212a3b]">
-                        <NotebookPen className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                        <span>
-                            <strong>Al terminar tu sesión anterior escribiste que ibas a probar esto:</strong>{' '}
-                            <span className="italic">“{preparation.previousStrategy}”</span>
-                        </span>
-                    </p>
-                </div>
-            )}
 
             {focusTopics.length > 0 && (
                 <div className="mt-4 rounded-xl border border-[#c8dcd0] bg-[#eef6f1] p-4">
@@ -240,38 +215,6 @@ export default function SessionSetup({
                 </div>
             </fieldset>
 
-            <fieldset disabled={disabled} className="mt-6 rounded-xl border border-black/10 p-4">
-                <legend className="px-1 text-sm font-semibold text-[#212a3b]">
-                    Antes de entrar (opcional)
-                </legend>
-                <p className="text-sm text-[#3d485e]">
-                    Al terminar, el sistema contrasta lo que escribas aquí con lo que quedó
-                    registrado en la sesión. Puedes dejarlo en blanco y empezar igual.
-                </p>
-
-                <div className="mt-4 space-y-4">
-                    {ORDERED_PREDICTION_QUESTIONS.map((question) => {
-                        const id = `prediction-${question.id}`;
-                        return (
-                            <div key={question.id}>
-                                <label htmlFor={id} className="block text-sm font-medium text-[#212a3b]">
-                                    {question.prompt}
-                                </label>
-                                <textarea
-                                    id={id}
-                                    rows={2}
-                                    maxLength={MAX_PREDICTION_CHARS}
-                                    value={prediction[question.id] ?? ''}
-                                    onChange={(event) => setAnswer(question.id, event.target.value)}
-                                    placeholder={question.placeholder}
-                                    className="mt-1 w-full rounded-lg border border-black/10 bg-white p-3 text-sm text-[#212a3b] placeholder:text-[#9aa3b2] focus:border-[#663820] focus:outline-none disabled:opacity-60"
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-            </fieldset>
-
             {isOverridden && (
                 <p className="mt-4 flex items-start gap-2 text-xs text-[#6b7280]">
                     <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -287,7 +230,6 @@ export default function SessionSetup({
                         difficultyLevel: effectiveLevel,
                         preSessionAnxiety: anxiety,
                         focusTopics,
-                        prediction,
                     })
                 }
                 className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#212a3b] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3d485e] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"

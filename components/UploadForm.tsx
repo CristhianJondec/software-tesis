@@ -9,11 +9,9 @@ import { BookUploadFormValues } from '@/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, MAX_BOOKS_PER_USER } from '@/lib/constants';
+import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, MAX_BOOKS_PER_USER, DEFAULT_VOICE } from '@/lib/constants';
 import FileUploader from './FileUploader';
-// VoiceSelector is intentionally not imported while only the default Vapi voice is available.
-// Restore the import and the commented form field below when multiple voices are enabled.
-// import VoiceSelector from './VoiceSelector';
+import VoiceSelector from './VoiceSelector';
 import LoadingOverlay from './LoadingOverlay';
 import { useSession } from "@/lib/auth-client";
 import { toast } from 'sonner';
@@ -65,8 +63,7 @@ const UploadForm = () => {
         resolver: zodResolver(UploadSchema),
         defaultValues: {
             title: '',
-            author: '',
-            persona: '',
+            persona: DEFAULT_VOICE,
             pdfFile: undefined,
             coverImage: undefined,
         },
@@ -118,7 +115,6 @@ const UploadForm = () => {
 
             const book = await createBook({
                 title: data.title,
-                author: data.author,
                 persona: data.persona,
                 fileURL: pdfKey,
                 fileBlobKey: pdfKey,
@@ -212,18 +208,17 @@ const UploadForm = () => {
                             )}
                         />
 
-                        {/* 4. Author Input */}
+                        {/* 4. Voice of the evaluating professor */}
                         <FormField
                             control={form.control}
-                            name="author"
+                            name="persona"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="form-label">Nombre del autor</FormLabel>
+                                    <FormLabel className="form-label">Voz del docente evaluador</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            className="form-input"
-                                            placeholder="ej: Robert Kiyosaki"
-                                            {...field}
+                                        <VoiceSelector
+                                            value={field.value}
+                                            onChange={field.onChange}
                                             disabled={isSubmitting}
                                         />
                                     </FormControl>
@@ -231,13 +226,6 @@ const UploadForm = () => {
                                 </FormItem>
                             )}
                         />
-
-                        {/*
-                          Voice selection is intentionally hidden. Investfied currently uses
-                          one default voice configured in Vapi. When multiple voices return,
-                          restore the VoiceSelector import and its FormField here, then make
-                          `persona` required again in UploadSchema.
-                        */}
 
                         {/* 5. Submit Button */}
                         <Button type="submit" className="form-btn" disabled={isSubmitting}>

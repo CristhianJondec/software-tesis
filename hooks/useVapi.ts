@@ -24,6 +24,7 @@ import { buildFocusDirectives } from '@/lib/preparation/focus';
 import type { PreparationTopicId } from '@/lib/preparation/topics';
 import type { PredictionAnswers } from '@/lib/prediction/questions';
 import { IBook, Messages } from '@/types';
+import { getVoice } from '@/lib/utils';
 import {
     startVoiceSession,
     endVoiceSession,
@@ -31,7 +32,6 @@ import {
     saveSessionTurn,
     updateSessionTurn,
 } from '@/lib/actions/session.actions';
-import { recordSessionClosing } from '@/lib/actions/progress.actions';
 import {
     mergeAdjacentTranscriptMessage,
     mergeTranscriptFragments,
@@ -62,22 +62,10 @@ const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
 const TIMER_INTERVAL_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
 
-/**
- * How long the evidence-based closing may take to come back from the server
- * before the call is hung up without it (docs/propuestas/05).
- *
- * The student pressed "finalizar": they are owed a hang-up, not a spinner. A
- * closing that does not arrive in time is simply not spoken, and the same
- * evidence still waits for them on the session page.
- */
-const CLOSING_FETCH_TIMEOUT_MS = 6_000;
-
-/**
- * Ceiling for the spoken closing itself. `vapi.say(..., true)` ends the call
- * once the text has been spoken; this is the net for the case where that
- * message never lands, so a session can never be left hanging on the line.
- */
-const CLOSING_SPEECH_TIMEOUT_MS = 45_000;
+/** Joins TTS chunks into one readable text, without doubled spaces. */
+function joinSpokenChunks(chunks: string[]): string {
+    return chunks.join(' ').replace(/\s+/g, ' ').trim();
+}
 
 let vapi: InstanceType<typeof Vapi>;
 function getVapi() {
@@ -118,14 +106,23 @@ export function useVapi(book: IBook) {
     const [activeLevel, setActiveLevel] = useState<DifficultyLevelId>(DEFAULT_DIFFICULTY_LEVEL);
     // Session that just closed, still awaiting its post-session self-report.
     const [finishedSessionId, setFinishedSessionId] = useState<string | null>(null);
-    // The agent is reading the evidence of the session before hanging up.
-    const [isClosing, setIsClosing] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
     const isStoppingRef = useRef(false);
-    const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Every in-flight turn save, so the post-session modal only opens once the
+    // whole session is in the database and its summary can include the last turn.
+    const pendingSavesRef = useRef<Set<Promise<unknown>>>(new Set());
+
+    // --- What the agent says, exactly as it was sent to the TTS ---
+    // Vapi's assistant `transcript` events are a re-transcription of the agent's
+    // audio, so terms the TTS pronounces in Spanish (English names, acronyms)
+    // come back mangled. `voice-input` carries the literal text each TTS chunk
+    // was generated from; the transcript events are only a fallback.
+    const assistantChunksRef = useRef<string[]>([]);
+    const assistantFallbackRef = useRef<string[]>([]);
+    const agentSpeechLastEndRef = useRef<number | null>(null);
 
     // --- Turn instrumentation (refs only: these must not re-render the UI) ---
     const turnIndexRef = useRef(0);
@@ -159,6 +156,14 @@ export function useVapi(book: IBook) {
         userTurnStartedAtRef.current = null;
         agentTurnStartedAtRef.current = null;
         activePersistedTurnRef.current = null;
+        assistantChunksRef.current = [];
+        assistantFallbackRef.current = [];
+        agentSpeechLastEndRef.current = null;
+    }, []);
+
+    const trackSave = useCallback((promise: Promise<unknown>) => {
+        pendingSavesRef.current.add(promise);
+        void promise.finally(() => pendingSavesRef.current.delete(promise));
     }, []);
 
     // Persist the first final chunk immediately so retrievals can anchor to it.
@@ -197,6 +202,7 @@ export function useVapi(book: IBook) {
                         console.error('Failed to extend session turn:', result.error);
                     }
                 });
+                trackSave(active.updateQueue);
                 return;
             }
 
@@ -228,6 +234,7 @@ export function useVapi(book: IBook) {
                     console.error('Failed to save session turn:', error);
                     return null;
                 });
+            trackSave(turnIdPromise);
 
             activePersistedTurnRef.current = {
                 role,
@@ -238,8 +245,32 @@ export function useVapi(book: IBook) {
                 updateQueue: Promise.resolve(),
             };
         },
-        [],
+        [trackSave],
     );
+
+    /**
+     * Closes the agent's current intervention: shows it as a finished bubble and
+     * persists it. Called when the student starts talking and when the call ends,
+     * because the TTS text arrives in chunks with no "turn finished" marker.
+     */
+    const commitAssistantTurn = useCallback(() => {
+        const chunks = assistantChunksRef.current;
+        const content = joinSpokenChunks(
+            chunks.length > 0 ? chunks : assistantFallbackRef.current,
+        );
+        assistantChunksRef.current = [];
+        assistantFallbackRef.current = [];
+        if (!content) return;
+
+        const endedAt = agentSpeechLastEndRef.current ?? Date.now();
+        const startedAt = agentTurnStartedAtRef.current ?? endedAt;
+        persistTurn('assistant', content, startedAt, endedAt);
+
+        setCurrentMessage('');
+        setMessages((prev) =>
+            mergeAdjacentTranscriptMessage(prev, { role: 'assistant', content }),
+        );
+    }, [persistTurn]);
 
     // Keep refs in sync with latest values for use in callbacks
     const maxDurationSeconds = MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE;
@@ -280,12 +311,8 @@ export function useVapi(book: IBook) {
 
             'call-end': () => {
                 // Don't reset isStoppingRef here - delayed events may still fire
+                commitAssistantTurn();
                 setStatus('idle');
-                setIsClosing(false);
-                if (closingTimeoutRef.current) {
-                    clearTimeout(closingTimeoutRef.current);
-                    closingTimeoutRef.current = null;
-                }
                 setCurrentMessage('');
                 setCurrentUserMessage('');
                 setIsMuted(false);
@@ -298,12 +325,19 @@ export function useVapi(book: IBook) {
 
                 // End session tracking
                 if (sessionIdRef.current) {
-                    // Only a session that produced turns gets a closing self-report:
-                    // asking after a call that never connected would store noise.
-                    if (turnIndexRef.current > 0) setFinishedSessionId(sessionIdRef.current);
-                    endVoiceSession(sessionIdRef.current, durationRef.current).catch((err) =>
+                    const endedSessionId = sessionIdRef.current;
+                    endVoiceSession(endedSessionId, durationRef.current).catch((err) =>
                         console.error('Failed to end voice session:', err),
                     );
+                    // Only a session that produced turns gets a closing self-report:
+                    // asking after a call that never connected would store noise.
+                    // The modal waits for the last turn saves, so the written
+                    // summary it shows covers the whole session.
+                    if (turnIndexRef.current > 0) {
+                        void Promise.allSettled([...pendingSavesRef.current]).then(() =>
+                            setFinishedSessionId(endedSessionId),
+                        );
+                    }
                     sessionIdRef.current = null;
                 }
 
@@ -312,7 +346,14 @@ export function useVapi(book: IBook) {
 
             'speech-start': () => {
                 const now = Date.now();
-                if (activePersistedTurnRef.current?.role !== 'assistant') {
+                // A new agent intervention starts only if the previous one was
+                // already closed; a second speech burst in the same turn (e.g.
+                // after a tool call) keeps the original start time.
+                const agentTurnOpen =
+                    activePersistedTurnRef.current?.role === 'assistant' ||
+                    assistantChunksRef.current.length > 0 ||
+                    assistantFallbackRef.current.length > 0;
+                if (!agentTurnOpen) {
                     agentTurnStartedAtRef.current = now;
                 }
 
@@ -335,6 +376,7 @@ export function useVapi(book: IBook) {
             'speech-end': () => {
                 // Starts the clock for the student's verbal response latency.
                 agentSpeechEndAtRef.current = Date.now();
+                agentSpeechLastEndRef.current = agentSpeechEndAtRef.current;
 
                 if (!isStoppingRef.current) {
                     // After AI finishes speaking, user can talk
@@ -347,8 +389,22 @@ export function useVapi(book: IBook) {
                 role: string;
                 transcriptType: string;
                 transcript: string;
+                input?: string;
             }) => {
+                // Literal text of each TTS chunk: the source of truth for what the
+                // agent says, shown live while it speaks.
+                if (message.type === 'voice-input') {
+                    const chunk = message.input?.trim();
+                    if (!chunk) return;
+                    assistantChunksRef.current.push(chunk);
+                    setCurrentMessage(joinSpokenChunks(assistantChunksRef.current));
+                    return;
+                }
+
                 if (message.type !== 'transcript') return;
+
+                // The student taking the floor closes the agent's intervention.
+                if (message.role === 'user') commitAssistantTurn();
 
                 // User finished speaking → AI is thinking
                 if (message.role === 'user' && message.transcriptType === 'final') {
@@ -385,28 +441,31 @@ export function useVapi(book: IBook) {
                     return;
                 }
 
-                // Partial AI transcript → show word-by-word
-                if (message.role === 'assistant' && message.transcriptType === 'partial') {
-                    setCurrentMessage(message.transcript);
+                // Agent transcripts are a re-transcription of its audio: they are
+                // only shown and stored when no `voice-input` text arrived.
+                if (message.role === 'assistant') {
+                    if (message.transcriptType === 'final' && message.transcript?.trim()) {
+                        assistantFallbackRef.current.push(message.transcript);
+                    }
+                    if (assistantChunksRef.current.length === 0) {
+                        const fallback = joinSpokenChunks(assistantFallbackRef.current);
+                        setCurrentMessage(
+                            message.transcriptType === 'partial'
+                                ? joinSpokenChunks([fallback, message.transcript ?? ''])
+                                : fallback,
+                        );
+                    }
                     return;
                 }
 
-                // Final transcript → add to messages
-                if (message.transcriptType === 'final') {
-                    if (message.role === 'assistant') setCurrentMessage('');
-                    if (message.role === 'user') setCurrentUserMessage('');
+                // Final student transcript → add to messages
+                if (message.role === 'user' && message.transcriptType === 'final') {
+                    setCurrentUserMessage('');
 
                     // Persist the closed turn right away, not at the end of the call.
                     const endedAt = Date.now();
-                    if (message.role === 'user' || message.role === 'assistant') {
-                        const startedAt =
-                            (message.role === 'user'
-                                ? userTurnStartedAtRef.current
-                                : agentTurnStartedAtRef.current) ?? endedAt;
-
-                        persistTurn(message.role, message.transcript, startedAt, endedAt);
-
-                    }
+                    const startedAt = userTurnStartedAtRef.current ?? endedAt;
+                    persistTurn('user', message.transcript, startedAt, endedAt);
 
                     setMessages((prev) =>
                         mergeAdjacentTranscriptMessage(prev, {
@@ -420,6 +479,7 @@ export function useVapi(book: IBook) {
             error: (error: Error) => {
                 console.error('Vapi error:', error);
                 // Don't reset isStoppingRef here - delayed events may still fire
+                commitAssistantTurn();
                 setStatus('idle');
                 setCurrentMessage('');
                 setCurrentUserMessage('');
@@ -432,10 +492,15 @@ export function useVapi(book: IBook) {
 
                 // End session tracking on error
                 if (sessionIdRef.current) {
-                    if (turnIndexRef.current > 0) setFinishedSessionId(sessionIdRef.current);
-                    endVoiceSession(sessionIdRef.current, durationRef.current).catch((err) =>
+                    const endedSessionId = sessionIdRef.current;
+                    endVoiceSession(endedSessionId, durationRef.current).catch((err) =>
                         console.error('Failed to end voice session on error:', err),
                     );
+                    if (turnIndexRef.current > 0) {
+                        void Promise.allSettled([...pendingSavesRef.current]).then(() =>
+                            setFinishedSessionId(endedSessionId),
+                        );
+                    }
                     sessionIdRef.current = null;
                 }
 
@@ -461,6 +526,7 @@ export function useVapi(book: IBook) {
         return () => {
             // End active session on unmount
             if (sessionIdRef.current) {
+                commitAssistantTurn();
                 getVapi().stop();
                 // We intentionally need the latest duration at unmount, not the
                 // value captured when the listeners were registered.
@@ -475,9 +541,8 @@ export function useVapi(book: IBook) {
                 getVapi().off(event as keyof typeof handlers, handler as () => void);
             });
             if (timerRef.current) clearInterval(timerRef.current);
-            if (closingTimeoutRef.current) clearTimeout(closingTimeoutRef.current);
         };
-    }, [durationRef, maxDurationRef, persistTurn, resetTurnTracking]);
+    }, [commitAssistantTurn, durationRef, maxDurationRef, persistTurn, resetTurnTracking]);
 
     const start = useCallback(async (options: StartSessionOptions = {}) => {
         if (!userId) {
@@ -522,9 +587,10 @@ export function useVapi(book: IBook) {
             // screen proposed, so the prompt and the stored row cannot disagree.
             const focusDirectives = buildFocusDirectives(result.focusTopics ?? []);
 
-            // Investfied currently exposes one voice only. It uses Azure's
-            // Peruvian-Spanish Camila voice through Vapi's default integration,
-            // so no separate Azure or ElevenLabs credential is needed.
+            // The student picks a male or female Azure Peruvian-Spanish voice when
+            // uploading the research (books.persona). Served through Vapi's default
+            // integration, so no separate Azure or ElevenLabs credential is needed.
+            const voiceId = getVoice(book.persona ?? undefined).id;
             const assistantOverrides = {
                 // The agent's behaviour is versioned in the repo, not in the Vapi
                 // dashboard. Vapi merges this override onto the assistant, so the
@@ -552,7 +618,7 @@ export function useVapi(book: IBook) {
                 },
                 voice: {
                     provider: VAPI_SPANISH_VOICE.provider,
-                    voiceId: VAPI_SPANISH_VOICE.voiceId,
+                    voiceId,
                     speed: VAPI_SPANISH_VOICE.speed,
                     chunkPlan: {
                         ...VAPI_SPANISH_VOICE.chunkPlan,
@@ -575,6 +641,24 @@ export function useVapi(book: IBook) {
                 artifactPlan: {
                     recordingEnabled: false,
                 },
+                // Vapi's default list, pinned here so a dashboard edit can never
+                // drop `voice-input`: the literal text of what the agent says,
+                // which the live transcript and the stored turns are built from.
+                clientMessages: [
+                    'conversation-update',
+                    'function-call',
+                    'hang',
+                    'model-output',
+                    'speech-update',
+                    'status-update',
+                    'transfer-update',
+                    'transcript',
+                    'tool-calls',
+                    'user-interrupted',
+                    'voice-input',
+                    // The SDK's generated type declares a single value, but the API
+                    // takes an array (see its own @example); cast around the typo.
+                ] as unknown as 'voice-input',
             };
 
             const call = await getVapi().start(ASSISTANT_ID, {
@@ -606,58 +690,15 @@ export function useVapi(book: IBook) {
                 'No se pudo iniciar la conversación. Revisa tu conexión, el permiso del micrófono y la disponibilidad de los servicios externos.',
             );
         }
-    }, [book.id, book.title, book.author, userId]);
+    }, [book.id, book.title, book.author, book.persona, userId]);
 
     /**
-     * Ends the session, letting the agent read the evidence of it first
-     * (docs/propuestas/05).
-     *
-     * The closing sentences are composed on the server by
-     * `lib/progress/closing.ts` and handed to the TTS verbatim through
-     * `vapi.say`, which hangs up once they have been spoken. The LLM is not
-     * asked to summarise anything: that is what makes "el cierre incluye
-     * evidencias, no elogios genéricos" a property of the code instead of a
-     * hope about a sampler.
-     *
-     * Every failure path ends the call anyway. A student who pressed "finalizar"
-     * must never be kept on the line by a closing that could not be built.
+     * Hangs up immediately. The session summary is no longer spoken by the
+     * agent: it is shown in writing in the post-session modal.
      */
-    const stop = useCallback(async () => {
+    const stop = useCallback(() => {
         if (isStoppingRef.current) return;
         isStoppingRef.current = true;
-
-        const sessionId = sessionIdRef.current;
-        if (!sessionId) {
-            getVapi().stop();
-            return;
-        }
-
-        setIsClosing(true);
-
-        try {
-            const closing = await Promise.race([
-                recordSessionClosing(sessionId),
-                new Promise<null>((resolve) =>
-                    setTimeout(() => resolve(null), CLOSING_FETCH_TIMEOUT_MS),
-                ),
-            ]);
-
-            const spokenText = closing?.success ? closing.data?.spokenText : null;
-
-            if (spokenText) {
-                // `true` = end the call once the text has been spoken.
-                getVapi().say(spokenText, true);
-                closingTimeoutRef.current = setTimeout(() => {
-                    closingTimeoutRef.current = null;
-                    getVapi().stop();
-                }, CLOSING_SPEECH_TIMEOUT_MS);
-                return;
-            }
-        } catch (err) {
-            console.error('Failed to build the spoken closing:', err);
-        }
-
-        setIsClosing(false);
         getVapi().stop();
     }, []);
 
@@ -692,7 +733,6 @@ export function useVapi(book: IBook) {
         stop,
         isMuted,
         toggleMuted,
-        isClosing,
         limitError,
         maxDurationSeconds,
         clearError,

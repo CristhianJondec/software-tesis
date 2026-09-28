@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Tooltip } from 'radix-ui';
 import { toast } from 'sonner';
 
 import SurveyQuestionHelp from '@/components/surveys/SurveyQuestionHelp';
@@ -43,7 +42,7 @@ export default function SurveyForm({ stageId, instrument }: SurveyFormProps) {
     };
 
     return (
-        <Tooltip.Provider delayDuration={200} skipDelayDuration={100}>
+        <>
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
                 <div className="sticky top-[74px] z-20 rounded-xl border border-black/10 bg-white/95 px-5 py-3 shadow-sm backdrop-blur">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -109,7 +108,7 @@ export default function SurveyForm({ stageId, instrument }: SurveyFormProps) {
                     </Button>
                 </div>
             </form>
-        </Tooltip.Provider>
+        </>
     );
 }
 

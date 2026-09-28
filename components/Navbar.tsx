@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, ChevronDown, History, LineChart, LogOut, ShieldCheck, Target } from 'lucide-react';
+import { BarChart3, ChevronDown, History, LineChart, LogOut, ShieldCheck } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 
 import { Button } from '@/components/ui/button';
@@ -146,13 +146,6 @@ const Navbar = ({
                                                     <Link href="/history" className="profile-menu-item">
                                                         <History className="size-4" />
                                                         Historial
-                                                    </Link>
-                                                </DropdownMenu.Item>
-
-                                                <DropdownMenu.Item asChild>
-                                                    <Link href="/preparacion" className="profile-menu-item">
-                                                        <Target className="size-4" />
-                                                        Mapa de preparación
                                                     </Link>
                                                 </DropdownMenu.Item>
 

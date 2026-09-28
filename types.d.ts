@@ -28,7 +28,7 @@ export type BookUploadFormValues = z.infer<typeof UploadSchema>;
 
 export interface CreateBook {
     title: string;
-    author: string;
+    author?: string;
     persona?: string;
     fileURL: string;
     fileBlobKey: string;

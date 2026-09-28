@@ -30,31 +30,20 @@ export const EVALUATOR_MODEL = {
     maxTokens: 250,
 } as const;
 
-// Future multi-voice configuration. The selector is intentionally hidden while
-// Investfied uses the single default voice provided by Vapi. Keep these entries
-// documented so VoiceSelector can be restored without rebuilding the feature.
-// 11Labs Voice IDs - Optimized for conversational AI
-// Voices for the evaluating professor who leads the thesis defense.
-// Descriptions are shown to the student in VoiceSelector, so they are in Spanish.
-// Do NOT change the voice IDs.
+// Voices for the evaluating professor, chosen by the student when uploading the
+// research and stored as the key in `books.persona`. Both are Azure Peruvian-
+// Spanish neural voices served through Vapi's default Azure integration, so the
+// "Spanish only" constraint holds whichever one is picked. Descriptions are
+// shown to the student in VoiceSelector, so they are in Spanish.
 export const voiceOptions = {
-    // Male voices
-    dave: { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Dave', description: 'Docente joven, tono cercano y directo' },
-    daniel: { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', description: 'Docente de trayectoria, tono firme y sereno' },
-    chris: { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris', description: 'Docente de trato llano, ritmo pausado' },
-    // Female voices
-    rachel: { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Docente de dicción clara, tono neutral y exigente' },
-    sarah: { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', description: 'Docente de tono medido, exigente sin dureza' },
-};
+    camila: { id: 'es-PE-CamilaNeural', name: 'Camila', gender: 'female', description: 'Voz femenina · español peruano' },
+    alex: { id: 'es-PE-AlexNeural', name: 'Alex', gender: 'male', description: 'Voz masculina · español peruano' },
+} as const;
 
-// Voice categories for the selector UI
-export const voiceCategories = {
-    male: ['dave', 'daniel', 'chris'],
-    female: ['rachel', 'sarah'],
-};
+export type VoiceKey = keyof typeof voiceOptions;
 
-// Default voice
-export const DEFAULT_VOICE = 'rachel';
+// Default voice, also used for books created before the selector existed.
+export const DEFAULT_VOICE: VoiceKey = 'camila';
 
 // ElevenLabs voice settings optimized for conversational AI
 export const VOICE_SETTINGS = {
@@ -66,11 +55,12 @@ export const VOICE_SETTINGS = {
 };
 
 // Azure TTS through Vapi's default integration: no Azure or ElevenLabs key is
-// required. Camila is a female Peruvian-Spanish voice, so language is fixed by
-// the voice ID instead of inferred from each chunk.
+// required. The voiceId is the default one; useVapi replaces it with the voice
+// the student picked (voiceOptions). Language is fixed by the es-PE voice ID
+// instead of inferred from each chunk.
 export const VAPI_SPANISH_VOICE = {
     provider: 'azure',
-    voiceId: 'es-PE-CamilaNeural',
+    voiceId: voiceOptions[DEFAULT_VOICE].id,
     speed: 1,
     chunkPlan: {
         enabled: true,

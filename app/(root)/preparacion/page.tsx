@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ArrowRight, BookOpen, Target } from 'lucide-react';
 
 import PreparationMap from '@/components/PreparationMap';
@@ -8,6 +9,8 @@ import { guardInterventionPage } from '@/lib/study/access';
 
 export const metadata = { title: 'Mapa de preparación — Investfied' };
 export const dynamic = 'force-dynamic';
+
+const PREPARATION_MAP_HIDDEN = true;
 
 /**
  * Preparation map of one investigation (docs/propuestas/03).
@@ -22,6 +25,10 @@ export default async function PreparationPage({
     searchParams: Promise<{ bookId?: string }>;
 }) {
     await guardInterventionPage();
+
+    // The preparation map is hidden from the product for now. The page and its
+    // logic stay in the repo; remove this redirect to bring it back.
+    if (PREPARATION_MAP_HIDDEN) redirect('/');
 
     const { bookId } = await searchParams;
 

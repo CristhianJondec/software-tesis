@@ -114,7 +114,9 @@ export const createBook = async (data: CreateBook) => {
                 userId,
                 title: data.title,
                 slug,
-                author: data.author,
+                // The form no longer asks for an author: the student who uploads
+                // the research is its author, so the account name fills the column.
+                author: data.author?.trim() || user.name?.trim() || 'Estudiante',
                 persona: data.persona,
                 fileURL: data.fileURL,
                 fileBlobKey: data.fileBlobKey,

@@ -41,8 +41,10 @@ export const getVoice = (persona?: string) => {
   const voiceEntry = Object.values(voiceOptions).find((v) => v.id === persona);
   if (voiceEntry) return voiceEntry;
 
-  // Find by key
-  const voiceByKey = voiceOptions[persona as keyof typeof voiceOptions];
+  // Find by key (Object.hasOwn avoids matching prototype keys like "toString")
+  const voiceByKey = Object.hasOwn(voiceOptions, persona)
+    ? voiceOptions[persona as keyof typeof voiceOptions]
+    : undefined;
   if (voiceByKey) return voiceByKey;
 
   // Default fallback

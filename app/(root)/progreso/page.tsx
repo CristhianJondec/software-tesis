@@ -111,12 +111,6 @@ export default async function ProgressPage({
                         Volver a la investigación
                     </Link>
                     <Link
-                        href={`/preparacion?bookId=${encodeURIComponent(book.id)}`}
-                        className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
-                    >
-                        Mapa de preparación
-                    </Link>
-                    <Link
                         href={`/history?bookId=${encodeURIComponent(book.id)}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#212a3b] shadow-sm transition-colors hover:bg-[#fff6e5]"
                     >

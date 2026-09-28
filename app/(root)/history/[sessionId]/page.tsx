@@ -10,17 +10,14 @@ import {
     LockKeyhole,
     MessageSquareText,
     Timer,
-    Scale,
     TrendingUp,
 } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
-import PredictionContrast from '@/components/PredictionContrast';
 import ProgressEvidence from '@/components/ProgressEvidence';
 import SessionReport from '@/components/SessionReport';
 import Transcript from '@/components/Transcript';
 import { getSessionFeedback } from '@/lib/actions/feedback.actions';
-import { getSessionPredictionContrast } from '@/lib/actions/prediction.actions';
 import { getSessionEvidence } from '@/lib/actions/progress.actions';
 import { getConversationById } from '@/lib/actions/session.actions';
 import { getDifficultyLevel } from '@/lib/difficulty/levels';
@@ -138,10 +135,9 @@ export default async function ConversationHistoryPage({
 
     const { sessionId } = await params;
     const { bookId } = await searchParams;
-    const [result, feedbackResult, contrastResult, evidenceResult] = await Promise.all([
+    const [result, feedbackResult, evidenceResult] = await Promise.all([
         getConversationById(sessionId),
         getSessionFeedback(sessionId),
-        getSessionPredictionContrast(sessionId),
         getSessionEvidence(sessionId),
     ]);
 
@@ -212,7 +208,6 @@ export default async function ConversationHistoryPage({
                         ['conversacion', 'Conversación'],
                         ['informe', 'Informe'],
                         ['evidencias', 'Evidencias de avance'],
-                        ['prediccion', 'Predicción'],
                         ['exposicion', 'Exposición gradual'],
                         ['rendimiento', 'Rendimiento'],
                         ['recuperaciones', 'Recuperaciones'],
@@ -274,21 +269,6 @@ export default async function ConversationHistoryPage({
                         ) : (
                             <p className="rounded-xl border border-[var(--border-subtle)] bg-[#f9fafb] p-4 text-sm text-[#3d485e]">
                                 {evidenceResult.error ?? 'No se pudieron cargar las evidencias.'}
-                            </p>
-                        )}
-                    </section>
-
-                    <section id="prediccion" className="scroll-mt-28 rounded-2xl bg-white p-5 sm:p-6">
-                        <SectionTitle
-                            icon={Scale}
-                            title="Predicción y resultado"
-                            description="Lo que escribiste antes de empezar, junto a lo que quedó registrado en la sesión. Las frases de la derecha se calculan de los turnos y de los niveles del informe; no las redacta un modelo, y ninguna califica tu predicción."
-                        />
-                        {contrastResult.success && contrastResult.data ? (
-                            <PredictionContrast contrast={contrastResult.data} />
-                        ) : (
-                            <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-                                {contrastResult.error ?? 'No se pudo cargar el contraste.'}
                             </p>
                         )}
                     </section>

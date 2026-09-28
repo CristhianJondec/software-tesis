@@ -4,10 +4,8 @@ import {MAX_FILE_SIZE, ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE}
 export const UploadSchema = z.object({
     // Postgres `text` stores both values without an application-level character cap.
     title: z.string().trim().min(1, "El título es obligatorio"),
-    author: z.string().trim().min(1, "El nombre del autor es obligatorio"),
-    // Voice selection is temporarily hidden while the product uses one Vapi voice.
-    // Make this required again when VoiceSelector returns to the creation form.
-    persona: z.string(),
+    // Voice of the evaluating professor: a key of voiceOptions in lib/constants.ts.
+    persona: z.string().min(1, "Selecciona una voz"),
     pdfFile: z.instanceof(File, { message: "PDF file is required" })
         .refine((file) => file.size <= MAX_FILE_SIZE, "File size must be less than 50MB")
         .refine((file) => ACCEPTED_PDF_TYPES.includes(file.type), "Only PDF files are accepted"),
