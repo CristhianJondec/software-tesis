@@ -250,7 +250,7 @@ propiedades van en `required` para que el modelo no las omita.
 | Nivel de exigencia | `lib/difficulty/levels.ts` | Bloque `{{levelDirectives}}` del prompt + temperatura; se guarda en `voice_sessions` |
 | Voz efectiva | `hooks/useVapi.ts` + `lib/constants.ts` | `Camila`, voz de Azure en español peruano mediante Vapi |
 | `variableValues` | `hooks/useVapi.ts` | `title`, `author`, `bookId`, `sessionId` |
-| Límite de duración | `hooks/useVapi.ts` (`maxDurationSeconds`) | Depende del plan del usuario |
+| Límite de duración | `lib/constants.ts` (`MAX_SESSION_DURATION_MINUTES`) + `hooks/useVapi.ts` | 20 minutos. A los 17 el agente recibe un aviso de sistema (`buildWrapUpMessage`) y pasa al cierre; a los 20 la app cuelga. `maxDurationSeconds` de Vapi se envía como 20 min + 30 s de respaldo, así que el valor del dashboard ya no aplica |
 
 ---
 

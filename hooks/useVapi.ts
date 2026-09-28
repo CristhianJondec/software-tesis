@@ -10,11 +10,13 @@ import {
     ASSISTANT_ID,
     EVALUATOR_MODEL,
     MAX_SESSION_DURATION_MINUTES,
+    SESSION_WRAP_UP_MINUTES_BEFORE_END,
+    VAPI_MAX_DURATION_BUFFER_SECONDS,
     VAPI_SPANISH_TRANSCRIBER,
     VAPI_SPANISH_VOICE,
     VAPI_START_SPEAKING_PLAN,
 } from '@/lib/constants';
-import { buildEvaluatorSystemPrompt } from '@/lib/agent-prompt';
+import { buildEvaluatorSystemPrompt, buildWrapUpMessage } from '@/lib/agent-prompt';
 import {
     DEFAULT_DIFFICULTY_LEVEL,
     getDifficultyLevel,
@@ -111,6 +113,8 @@ export function useVapi(book: IBook) {
     const startTimeRef = useRef<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
     const isStoppingRef = useRef(false);
+    // Whether the agent was already told to move to the closing in this call.
+    const wrapUpSentRef = useRef(false);
     // Every in-flight turn save, so the post-session modal only opens once the
     // whole session is in the database and its summary can include the last turn.
     const pendingSavesRef = useRef<Set<Promise<unknown>>>(new Set());
@@ -282,6 +286,7 @@ export function useVapi(book: IBook) {
         const handlers = {
             'call-start': () => {
                 isStoppingRef.current = false;
+                wrapUpSentRef.current = false;
                 resetTurnTracking();
                 setStatus('starting'); // AI speaks first, wait for it
                 setCurrentMessage('');
@@ -296,8 +301,26 @@ export function useVapi(book: IBook) {
                         const newDuration = Math.floor((Date.now() - startTimeRef.current) / TIMER_INTERVAL_MS);
                         setDuration(newDuration);
 
+                        // Near the cap: tell the agent to close. It is added to the
+                        // context without forcing a reply, so it never talks over
+                        // the student; it takes effect on the agent's next turn.
+                        const wrapUpAt =
+                            maxDurationRef.current - SESSION_WRAP_UP_MINUTES_BEFORE_END * SECONDS_PER_MINUTE;
+                        if (!wrapUpSentRef.current && newDuration >= wrapUpAt) {
+                            wrapUpSentRef.current = true;
+                            getVapi().send({
+                                type: 'add-message',
+                                message: {
+                                    role: 'system',
+                                    content: buildWrapUpMessage(SESSION_WRAP_UP_MINUTES_BEFORE_END),
+                                },
+                                triggerResponseEnabled: false,
+                            });
+                        }
+
                         // Check duration limit
-                        if (newDuration >= maxDurationRef.current) {
+                        if (newDuration >= maxDurationRef.current && !isStoppingRef.current) {
+                            isStoppingRef.current = true;
                             getVapi().stop();
                             setLimitError(
                                 `La sesión alcanzó el límite de ${Math.floor(
@@ -645,6 +668,10 @@ export function useVapi(book: IBook) {
                         ...VAPI_START_SPEAKING_PLAN.customEndpointingRules,
                     ],
                 },
+                // Vapi's own cap, pinned so the dashboard default (10 min) can
+                // never end a session before the app's limit does.
+                maxDurationSeconds:
+                    MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE + VAPI_MAX_DURATION_BUFFER_SECONDS,
                 // Research sessions keep transcripts and metrics, but no audio
                 // recording is created or exposed.
                 artifactPlan: {

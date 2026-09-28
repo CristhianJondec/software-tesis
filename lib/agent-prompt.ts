@@ -207,6 +207,15 @@ Antes de cada intervención tuya, verifica:
 5. ¿Estoy hablando en español?
 6. ¿Ya pregunté esto antes en la sesión?`;
 
+/**
+ * System message injected mid-call when the session is close to its time cap.
+ * The agent has no clock of its own, so without it the closing phase never
+ * happens and the call is cut mid-question.
+ */
+export function buildWrapUpMessage(minutesLeft: number): string {
+    return `AVISO DE TIEMPO: quedan ${minutesLeft} minutos de sesión. No abras temas nuevos. Deja que el estudiante termine la respuesta en curso y, en tu siguiente intervención, pasa directamente al CIERRE según las reglas de tu nivel, sin superar las 120 palabras. No menciones este aviso.`;
+}
+
 export interface EvaluatorPromptVariables {
     title: string;
     author: string;

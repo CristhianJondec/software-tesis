@@ -9,7 +9,16 @@ export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 // Operational cap for a single live call. It is not tied to a payment plan.
-export const MAX_SESSION_DURATION_MINUTES = 60;
+export const MAX_SESSION_DURATION_MINUTES = 20;
+
+// Minutes before the cap at which the agent is told to move to the closing,
+// so the session ends with its observations instead of being cut mid-question.
+export const SESSION_WRAP_UP_MINUTES_BEFORE_END = 3;
+
+// Vapi's own call cap (maxDurationSeconds) is sent from code with this margin
+// over the app cap: the app hangs up first with its own message, and Vapi only
+// acts as a backstop. Without it, the dashboard value (10 min by default) rules.
+export const VAPI_MAX_DURATION_BUFFER_SECONDS = 30;
 
 // Maximum number of investigaciones (books) a single user can have at once.
 // Independent of the legacy subscription/billing scaffolding — do not read
