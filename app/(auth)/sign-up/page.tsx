@@ -41,6 +41,8 @@ export default function SignUpPage() {
                 <CardDescription>Empieza a chatear con tus investigaciones</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
+                {/* Google sign-up hidden: GOOGLE_CLIENT_ID/SECRET are not configured.
+                    The handler and the Better Auth provider stay in place; uncomment to bring it back.
                 <Button type="button" variant="outline" onClick={handleGoogle} disabled={isPending}>
                     Continuar con Google
                 </Button>
@@ -50,6 +52,7 @@ export default function SignUpPage() {
                     <span>O</span>
                     <div className="h-px flex-1 bg-border" />
                 </div>
+                */}
 
                 <form onSubmit={handleEmailSignUp} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-2">
