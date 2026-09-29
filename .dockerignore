@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.idea
+.claude
+.ai
+docs
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.output.txt
+Dockerfile
+docker-compose.yml
