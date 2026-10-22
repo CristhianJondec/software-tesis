@@ -32,8 +32,9 @@ export interface StudyContext {
     hasMaterialsAccess: boolean;
     /**
      * Whether the O₁ baseline (STAI T1 + PRCS-12 T1) is submitted. Participants
-     * cannot reach the agent or the materials before it, so the baseline is
-     * always measured before any exposure. Researchers are always true.
+     * cannot upload a thesis, start a voice session or open the materials
+     * before it, so the baseline is always measured before any exposure.
+     * Researchers are always true.
      */
     baselineComplete: boolean;
 }
@@ -94,18 +95,13 @@ export async function getStudyContext(): Promise<StudyContext | null> {
  * rendering, and a participant landing on a forbidden URL should be moved to
  * the screen that IS theirs, not shown an error.
  */
-export async function guardInterventionPage(
-    options: { allowMissingBaseline?: boolean } = {},
-): Promise<StudyContext> {
+export async function guardInterventionPage(): Promise<StudyContext> {
     const context = await getStudyContext();
     if (!context) redirect('/sign-in');
-    if (context.hasInterventionAccess) {
-        // `allowMissingBaseline` is for screens that explain the block themselves
-        // instead of redirecting (the upload page shows a modal); they must not
-        // expose any of the intervention while the baseline is missing.
-        if (!context.baselineComplete && !options.allowMissingBaseline) redirect(BASELINE_PATH);
-        return context;
-    }
+    // Navigation stays free while the O₁ baseline is missing: what exposes the
+    // participant to the intervention (uploading a thesis, starting a voice
+    // session) is blocked by `requireInterventionAccess` in the server actions.
+    if (context.hasInterventionAccess) return context;
     redirect(context.group === 'control' ? '/materiales' : '/sin-asignar');
 }
 
@@ -116,11 +112,7 @@ export async function guardInterventionPage(
  */
 export async function redirectIfOutsideIntervention(): Promise<StudyContext | null> {
     const context = await getStudyContext();
-    if (!context) return context;
-    if (context.hasInterventionAccess) {
-        if (!context.baselineComplete) redirect(BASELINE_PATH);
-        return context;
-    }
+    if (!context || context.hasInterventionAccess) return context;
     redirect(context.group === 'control' ? '/materiales' : '/sin-asignar');
 }
 

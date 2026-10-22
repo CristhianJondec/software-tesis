@@ -163,7 +163,12 @@ export const startVoiceSession = async (
     input: StartSessionInput = {},
 ): Promise<StartSessionResult> => {
     try {
-        await requireInterventionAccess();
+        // Its message (wrong arm, or O₁ baseline missing) is shown to the student.
+        try {
+            await requireInterventionAccess();
+        } catch (accessError) {
+            return { success: false, error: (accessError as Error).message };
+        }
         const user = await requireUser();
         const userId = user.id;
 

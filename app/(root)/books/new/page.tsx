@@ -9,8 +9,7 @@ import { getThesisUploadBlock, THESIS_UPLOAD_BLOCK_MESSAGES } from "@/lib/study/
 export const dynamic = 'force-dynamic';
 
 const Page = async () => {
-    // Without the O₁ baseline the page still opens, but only to show the modal.
-    const context = await guardInterventionPage({ allowMissingBaseline: true });
+    const context = await guardInterventionPage();
 
     // Upload opens to the experimental arm only when the admin turns the flag on.
     const uploadBlock = await getThesisUploadBlock(context);

@@ -1,6 +1,7 @@
 import React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { ClipboardList } from 'lucide-react'
 
 const HeroSection = () => {
     return (
@@ -14,10 +15,16 @@ const HeroSection = () => {
                             Convierte tus investigaciones en conversaciones interactivas con IA. <br className="hidden md:block" />
                             Escucha, aprende y analiza tus investigaciones favoritas.
                         </p>
-                        <Link href="/books/new" className="library-cta-primary mt-4 flex items-center justify-center">
-                            <span className="text-3xl font-light mb-1 mr-2">+</span>
-                            <span className="text-[#212a3b]">Agregar investigación</span>
-                        </Link>
+                        <div className="mt-4 flex flex-col gap-3 lg:flex-row">
+                            <Link href="/books/new" className="library-cta-primary flex items-center justify-center">
+                                <span className="text-3xl font-light mb-1 mr-2">+</span>
+                                <span className="text-[#212a3b]">Agregar investigación</span>
+                            </Link>
+                            <Link href="/surveys" className="library-cta-primary flex items-center justify-center">
+                                <ClipboardList className="size-5 text-[#663820]" aria-hidden="true" />
+                                <span className="text-[#212a3b]">Encuestas</span>
+                            </Link>
+                        </div>
                     </div>
 
                     {/* Center Part - Desktop */}
