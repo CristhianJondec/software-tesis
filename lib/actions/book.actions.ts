@@ -10,6 +10,7 @@ import { MAX_BOOKS_PER_USER, RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/l
 import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
 import { requireInterventionAccess } from '@/lib/study/access';
+import { getThesisUploadBlock, THESIS_UPLOAD_BLOCK_MESSAGES } from '@/lib/study/upload.server';
 import { computeBookTopicCoverage } from '@/lib/preparation/compute';
 import { deleteObjects } from '@/lib/r2';
 import { generateSlug } from '@/lib/utils';
@@ -82,7 +83,12 @@ export const getUserBookCount = async () => {
 
 export const createBook = async (data: CreateBook) => {
     try {
-        await requireInterventionAccess();
+        const context = await requireInterventionAccess();
+        // Upload is opened to the experimental arm by a flag in /admin.
+        const uploadBlock = await getThesisUploadBlock(context);
+        if (uploadBlock) {
+            return { success: false, error: THESIS_UPLOAD_BLOCK_MESSAGES[uploadBlock] };
+        }
         const user = await requireUser();
         const userId = user.id;
 

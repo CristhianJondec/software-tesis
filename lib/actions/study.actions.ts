@@ -9,6 +9,7 @@ import { requireAdmin } from '@/lib/admin/access';
 import { normalizeStudyGroup } from '@/lib/study/groups';
 import { GLOBAL_VOICE_LIMIT_KEY, parseVoiceLimitInput } from '@/lib/study/usage';
 import { readGlobalVoiceLimit } from '@/lib/study/usage.server';
+import { readThesisUploadEnabled, THESIS_UPLOAD_ENABLED_KEY } from '@/lib/study/upload.server';
 
 /**
  * Assigns a participant to an arm of the experiment.
@@ -174,5 +175,41 @@ export const setUserVoiceLimit = async (
     } catch (error) {
         console.error('Error setting user voice limit', error);
         return { success: false, error: 'No se pudo guardar el límite del participante.' };
+    }
+};
+
+// ============================================================================
+// Thesis upload flag (lib/study/upload.server.ts)
+// ============================================================================
+
+/** Opens or closes thesis upload for the experimental arm. */
+export const setThesisUploadEnabled = async (
+    enabled: boolean,
+): Promise<{ success: boolean; error?: string }> => {
+    try {
+        await requireAdmin();
+
+        const value = enabled ? 'true' : 'false';
+        await db
+            .insert(appSettings)
+            .values({ key: THESIS_UPLOAD_ENABLED_KEY, value, updatedAt: new Date() })
+            .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+
+        revalidatePath('/admin');
+        revalidatePath('/books/new');
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting thesis upload flag', error);
+        return { success: false, error: 'No se pudo cambiar el estado de la subida de tesis.' };
+    }
+};
+
+export const getThesisUploadEnabled = async (): Promise<{ success: boolean; data?: boolean; error?: string }> => {
+    try {
+        await requireAdmin();
+        return { success: true, data: await readThesisUploadEnabled() };
+    } catch (error) {
+        console.error('Error reading thesis upload flag', error);
+        return { success: false, error: 'No se pudo leer el estado de la subida de tesis.' };
     }
 };

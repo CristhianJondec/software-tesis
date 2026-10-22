@@ -94,11 +94,16 @@ export async function getStudyContext(): Promise<StudyContext | null> {
  * rendering, and a participant landing on a forbidden URL should be moved to
  * the screen that IS theirs, not shown an error.
  */
-export async function guardInterventionPage(): Promise<StudyContext> {
+export async function guardInterventionPage(
+    options: { allowMissingBaseline?: boolean } = {},
+): Promise<StudyContext> {
     const context = await getStudyContext();
     if (!context) redirect('/sign-in');
     if (context.hasInterventionAccess) {
-        if (!context.baselineComplete) redirect(BASELINE_PATH);
+        // `allowMissingBaseline` is for screens that explain the block themselves
+        // instead of redirecting (the upload page shows a modal); they must not
+        // expose any of the intervention while the baseline is missing.
+        if (!context.baselineComplete && !options.allowMissingBaseline) redirect(BASELINE_PATH);
         return context;
     }
     redirect(context.group === 'control' ? '/materiales' : '/sin-asignar');

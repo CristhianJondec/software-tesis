@@ -4,7 +4,8 @@ import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
 import MaterialsManager from '@/components/admin/MaterialsManager';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
 import VoiceLimitInput from '@/components/admin/VoiceLimitInput';
-import { getVoiceUsageOverview } from '@/lib/actions/study.actions';
+import ThesisUploadToggle from '@/components/admin/ThesisUploadToggle';
+import { getThesisUploadEnabled, getVoiceUsageOverview } from '@/lib/actions/study.actions';
 import { checkAdminAccess } from '@/lib/admin/access';
 import { listStudyMaterialsForAdmin } from '@/lib/actions/material.actions';
 import { getAdminSurveyOverview, type SurveyStageStatus } from '@/lib/actions/survey.actions';
@@ -45,10 +46,11 @@ export default async function AdminPage() {
         );
     }
 
-    const [result, materialsResult, usageResult] = await Promise.all([
+    const [result, materialsResult, usageResult, uploadFlagResult] = await Promise.all([
         getAdminSurveyOverview(),
         listStudyMaterialsForAdmin(),
         getVoiceUsageOverview(),
+        getThesisUploadEnabled(),
     ]);
     if (!result.success || !result.data) {
         return (
@@ -119,6 +121,22 @@ export default async function AdminPage() {
                 <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
                     <p className="text-sm font-semibold text-[var(--text-secondary)]">Sin asignar (sin acceso)</p>
                     <p className="mt-2 font-serif text-3xl font-bold">{unassignedCount}</p>
+                </div>
+            </section>
+
+            <section className="mb-10">
+                <div className="mb-4">
+                    <h2 className="font-serif text-2xl font-bold">Subida de tesis</h2>
+                    <p className="subtitle mt-2 max-w-3xl">
+                        Controla cuándo el grupo <strong>experimental</strong> puede subir su investigación. En{' '}
+                        <strong>false</strong>, al entrar a «Agregar» verán un aviso de que la función estará disponible en
+                        breve. Quien no haya respondido las dos encuestas de O₁ tampoco puede subir, esté como esté esta opción.
+                    </p>
+                </div>
+                {!uploadFlagResult.success && <p className="mb-3 text-sm text-red-700">{uploadFlagResult.error}</p>}
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+                    <span className="text-sm font-semibold">Subida habilitada</span>
+                    <ThesisUploadToggle enabled={uploadFlagResult.data ?? false} />
                 </div>
             </section>
 

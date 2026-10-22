@@ -1,11 +1,19 @@
 import UploadForm from "@/components/UploadForm";
 import LimitReachedModal from "@/components/LimitReachedModal";
+import UploadUnavailableModal from "@/components/UploadUnavailableModal";
 import { getUserBookCount } from "@/lib/actions/book.actions";
 import { MAX_BOOKS_PER_USER } from "@/lib/constants";
 import { guardInterventionPage } from "@/lib/study/access";
+import { getThesisUploadBlock, THESIS_UPLOAD_BLOCK_MESSAGES } from "@/lib/study/upload.server";
+
+export const dynamic = 'force-dynamic';
 
 const Page = async () => {
-    await guardInterventionPage();
+    // Without the O₁ baseline the page still opens, but only to show the modal.
+    const context = await guardInterventionPage({ allowMissingBaseline: true });
+
+    // Upload opens to the experimental arm only when the admin turns the flag on.
+    const uploadBlock = await getThesisUploadBlock(context);
 
     const bookCount = await getUserBookCount();
     const limitReached = (bookCount.data ?? 0) >= MAX_BOOKS_PER_USER;
@@ -17,7 +25,16 @@ const Page = async () => {
                 <p className="subtitle">Sube un PDF para generar tu experiencia de investigación interactiva</p>
             </section>
 
-            {limitReached ? <LimitReachedModal /> : <UploadForm />}
+            {uploadBlock ? (
+                <UploadUnavailableModal
+                    message={THESIS_UPLOAD_BLOCK_MESSAGES[uploadBlock]}
+                    showSurveysLink={uploadBlock === 'baseline'}
+                />
+            ) : limitReached ? (
+                <LimitReachedModal />
+            ) : (
+                <UploadForm />
+            )}
         </main>
     )
 }
