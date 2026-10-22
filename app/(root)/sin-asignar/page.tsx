@@ -26,10 +26,6 @@ export default async function UnassignedPage() {
                     El responsable de la investigación todavía no ha habilitado tu participación. En cuanto lo haga,
                     podrás acceder desde este mismo inicio de sesión.
                 </p>
-                <p className="mt-6 text-sm text-[var(--text-secondary)]">
-                    Si crees que esto es un error, comunícate con el responsable del estudio indicando el correo con el
-                    que te registraste: <strong>{context.email}</strong>
-                </p>
             </div>
         </main>
     );

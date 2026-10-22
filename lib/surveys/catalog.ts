@@ -167,6 +167,17 @@ export const SURVEY_INSTRUMENTS: Record<SurveyType, SurveyInstrument> = {
     },
 };
 
+/**
+ * Situational framing shown in a modal right before the STAI state scale, at
+ * BOTH O₁ (T1) and O₂ (T2) and for both arms. It is one constant on purpose:
+ * the two measurements must be preceded by exactly the same text.
+ *
+ * Deliberately kept OUT of `SURVEY_INSTRUMENTS.STAI`: the instrument's original
+ * instructions, items, options and scoring stay untouched.
+ */
+export const STAI_SITUATION_INTRO =
+    'Imagina por un momento que en unos minutos presentarás un avance de tu trabajo de investigación ante un docente y responderás sus preguntas. Teniendo presente esa situación, indica cómo te sientes ahora mismo.';
+
 export const SURVEY_STAGES: readonly SurveyStage[] = [
     { id: 'stai-t1', type: 'STAI', phase: 'T1', title: 'STAI — Medición Basal (T1)', shortTitle: 'STAI T1', estimatedMinutes: 4 },
     { id: 'prcs12-t1', type: 'PRCS12', phase: 'T1', title: 'PRCS-12 — Medición Basal (T1)', shortTitle: 'PRCS-12 T1', estimatedMinutes: 3 },

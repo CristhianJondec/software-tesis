@@ -36,6 +36,8 @@ import {
     serializeTopicIds,
 } from '@/lib/prediction/questions';
 import { getCurrentBillingPeriodStart } from '@/lib/subscription-constants';
+import { MIN_SECONDS_TO_START_SESSION } from '@/lib/study/usage';
+import { getVoiceAllowance } from '@/lib/study/usage.server';
 import { getVapiCallDetails } from '@/lib/vapi.server';
 import type {
     EndSessionResult,
@@ -175,6 +177,20 @@ export const startVoiceSession = async (
             return { success: false, error: 'Book not found or unauthorized' };
         }
 
+        // Total voice time cap set by the admin (personal, else global). The
+        // session is also shortened so it can never run past what is left.
+        const allowance = await getVoiceAllowance(userId);
+        if (allowance.remainingSeconds !== null && allowance.remainingSeconds < MIN_SECONDS_TO_START_SESSION) {
+            return {
+                success: false,
+                error: `Alcanzaste el tiempo total de uso del agente asignado a tu cuenta (${allowance.limitMinutes} minutos).`,
+            };
+        }
+        const maxDurationSeconds = Math.min(
+            MAX_SESSION_DURATION_MINUTES * 60,
+            allowance.remainingSeconds ?? Number.POSITIVE_INFINITY,
+        );
+
         const preSessionAnxiety = normalizeAnxietyScore(input.preSessionAnxiety);
 
         // The rule is re-run server-side over the stored history: `levelSource`
@@ -240,6 +256,7 @@ export const startVoiceSession = async (
             success: true,
             sessionId: session.id,
             maxDurationMinutes: MAX_SESSION_DURATION_MINUTES,
+            maxDurationSeconds,
             difficultyLevel,
             levelSource,
             focusTopics,

@@ -1,6 +1,6 @@
 'use server';
 
-import { and, count, cosineDistance, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, count, cosineDistance, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
@@ -242,6 +242,29 @@ export const saveBookSegments = async (bookId: string, segments: TextSegment[]) 
     }
 };
 
+// Whether the installed pgvector supports `hnsw.iterative_scan` (added in 0.8.0).
+// Checked once per server process: setting an unknown `hnsw.*` parameter fails.
+let iterativeScanSupport: Promise<boolean> | null = null;
+
+function supportsIterativeScan(): Promise<boolean> {
+    iterativeScanSupport ??= db
+        .execute<{ extversion: string }>(sql`SELECT extversion FROM pg_extension WHERE extname = 'vector'`)
+        .then((rows) => {
+            const [major = 0, minor = 0] = (rows[0]?.extversion ?? '0.0').split('.').map(Number);
+            const supported = major > 0 || minor >= 8;
+            if (!supported) {
+                console.warn('pgvector < 0.8: filtered HNSW search may return fewer segments than requested');
+            }
+            return supported;
+        })
+        .catch((error) => {
+            console.error('Could not read the pgvector version:', error);
+            iterativeScanSupport = null;
+            return false;
+        });
+    return iterativeScanSupport;
+}
+
 // Semantic search via pgvector cosine distance over Gemini embeddings.
 // `limit` and `maxDistance` default to the retriever parameters declared in
 // lib/constants.ts (RETRIEVER_TOP_K, RETRIEVER_MAX_DISTANCE), which is where the
@@ -257,22 +280,35 @@ export const searchBookSegments = async (
 
         const queryEmbedding = await generateQueryEmbedding(query);
         const distance = cosineDistance(bookSegments.embedding, queryEmbedding);
+        const iterativeScan = await supportsIterativeScan();
 
-        const results = await db
-            .select({
-                id: bookSegments.id,
-                bookId: bookSegments.bookId,
-                content: bookSegments.content,
-                segmentIndex: bookSegments.segmentIndex,
-                pageNumber: bookSegments.pageNumber,
-                wordCount: bookSegments.wordCount,
-                // Cosine distance to the query: needed to score retrieval quality.
-                distance,
-            })
-            .from(bookSegments)
-            .where(eq(bookSegments.bookId, bookId))
-            .orderBy(distance)
-            .limit(limit);
+        // The HNSW index applies the `book_id` filter AFTER fetching its
+        // ef_search (40) nearest candidates across EVERY thesis. Once the table
+        // holds many theses, those 40 can include few or none of this one, and
+        // the agent would wrongly say a topic is missing from the document.
+        // Iterative scan (pgvector >= 0.8) keeps scanning until `limit` rows of
+        // this book are found, in exact distance order.
+        const results = await db.transaction(async (tx) => {
+            if (iterativeScan) {
+                await tx.execute(sql`SET LOCAL hnsw.iterative_scan = strict_order`);
+            }
+
+            return tx
+                .select({
+                    id: bookSegments.id,
+                    bookId: bookSegments.bookId,
+                    content: bookSegments.content,
+                    segmentIndex: bookSegments.segmentIndex,
+                    pageNumber: bookSegments.pageNumber,
+                    wordCount: bookSegments.wordCount,
+                    // Cosine distance to the query: needed to score retrieval quality.
+                    distance,
+                })
+                .from(bookSegments)
+                .where(eq(bookSegments.bookId, bookId))
+                .orderBy(distance)
+                .limit(limit);
+        });
 
         // Relevance cut-off. Ordering alone always yields `limit` rows, so without
         // this the caller receives the least-bad segments for a question the

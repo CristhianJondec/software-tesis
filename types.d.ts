@@ -116,6 +116,11 @@ export interface StartSessionResult {
     success: boolean;
     sessionId?: string;
     maxDurationMinutes?: number;
+    /**
+     * Length cap of THIS session: the per-session cap, shortened to the voice
+     * time the account still has left (lib/study/usage.ts).
+     */
+    maxDurationSeconds?: number;
     /** Level the server actually stored — the client must run the session at this one. */
     difficultyLevel?: DifficultyLevelId;
     /** Derived server-side by re-running the rule, never taken from the client. */

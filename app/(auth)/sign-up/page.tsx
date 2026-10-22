@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const ALLOWED_EMAIL_DOMAIN = '@unitru.edu.pe';
+
 export default function SignUpPage() {
     const router = useRouter();
     const [isPending, setIsPending] = useState(false);
@@ -19,6 +21,11 @@ export default function SignUpPage() {
 
     const handleEmailSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
+        // Client-side only: the study is limited to UNT institutional accounts.
+        if (!email.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)) {
+            toast.error(`Usa tu correo institucional (${ALLOWED_EMAIL_DOMAIN}).`);
+            return;
+        }
         setIsPending(true);
         const { error } = await authClient.signUp.email({ email, password, name });
         setIsPending(false);
@@ -70,6 +77,7 @@ export default function SignUpPage() {
                         <Input
                             id="email"
                             type="email"
+                            placeholder={`usuario${ALLOWED_EMAIL_DOMAIN}`}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required

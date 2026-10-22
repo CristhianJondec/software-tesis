@@ -57,6 +57,9 @@ export const listStudyMaterials = async (): Promise<{
                     : 'Tu cuenta todavía no tiene un grupo asignado.',
             };
         }
+        if (!context.baselineComplete) {
+            return { success: false, error: 'Completa primero las encuestas iniciales (STAI T1 y PRCS-12 T1).' };
+        }
 
         return { success: true, data: await readMaterials() };
     } catch (error) {

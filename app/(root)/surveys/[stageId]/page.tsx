@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft, Clock3, LockKeyhole } from 'lucide-react';
 
+import StaiIntroModal from '@/components/surveys/StaiIntroModal';
 import SurveyForm from '@/components/surveys/SurveyForm';
 import { Button } from '@/components/ui/button';
 import { getSurveyProgress } from '@/lib/actions/survey.actions';
@@ -48,6 +49,7 @@ export default async function SurveyStagePage({ params }: { params: Promise<{ st
     const instrument = SURVEY_INSTRUMENTS[stage.type];
     return (
         <main className="wrapper container">
+            {stage.type === 'STAI' && <StaiIntroModal />}
             <Button asChild variant="ghost" className="mb-5 -ml-3">
                 <Link href="/surveys"><ArrowLeft className="size-4" /> Volver a las etapas</Link>
             </Button>

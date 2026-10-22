@@ -276,11 +276,15 @@ export function useVapi(book: IBook) {
         );
     }, [persistTurn]);
 
-    // Keep refs in sync with latest values for use in callbacks
-    const maxDurationSeconds = MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE;
-    const maxDurationRef = useLatestRef(maxDurationSeconds);
+    // Cap of the current session. The server may shorten it to the voice time
+    // the account has left (lib/study/usage.ts), so it is state, not a constant.
+    const [maxDurationSeconds, setMaxDurationSeconds] = useState(
+        MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE,
+    );
+    // Written synchronously in start(): the timer must see the new cap from its
+    // first tick, before React has re-rendered.
+    const maxDurationRef = useRef(maxDurationSeconds);
     const durationRef = useLatestRef(duration);
-
     // Set up Vapi event listeners
     useEffect(() => {
         const handlers = {
@@ -304,15 +308,23 @@ export function useVapi(book: IBook) {
                         // Near the cap: tell the agent to close. It is added to the
                         // context without forcing a reply, so it never talks over
                         // the student; it takes effect on the agent's next turn.
-                        const wrapUpAt =
-                            maxDurationRef.current - SESSION_WRAP_UP_MINUTES_BEFORE_END * SECONDS_PER_MINUTE;
+                        // A session shortened by the account's time cap gets a
+                        // proportionally shorter warning, so it is not told to
+                        // close right after the opening.
+                        const wrapUpLeadSeconds = Math.min(
+                            SESSION_WRAP_UP_MINUTES_BEFORE_END * SECONDS_PER_MINUTE,
+                            Math.floor(maxDurationRef.current / 3),
+                        );
+                        const wrapUpAt = maxDurationRef.current - wrapUpLeadSeconds;
                         if (!wrapUpSentRef.current && newDuration >= wrapUpAt) {
                             wrapUpSentRef.current = true;
                             getVapi().send({
                                 type: 'add-message',
                                 message: {
                                     role: 'system',
-                                    content: buildWrapUpMessage(SESSION_WRAP_UP_MINUTES_BEFORE_END),
+                                    content: buildWrapUpMessage(
+                                        Math.max(1, Math.round(wrapUpLeadSeconds / SECONDS_PER_MINUTE)),
+                                    ),
                                 },
                                 triggerResponseEnabled: false,
                             });
@@ -323,9 +335,9 @@ export function useVapi(book: IBook) {
                             isStoppingRef.current = true;
                             getVapi().stop();
                             setLimitError(
-                                `La sesión alcanzó el límite de ${Math.floor(
-                                    maxDurationRef.current / SECONDS_PER_MINUTE,
-                                )} minutos.`,
+                                maxDurationRef.current < MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE
+                                    ? 'Se agotó el tiempo total de uso del agente asignado a tu cuenta.'
+                                    : `La sesión alcanzó el límite de ${MAX_SESSION_DURATION_MINUTES} minutos.`,
                             );
                         }
                     }
@@ -603,6 +615,11 @@ export function useVapi(book: IBook) {
 
             sessionIdRef.current = result.sessionId || null;
 
+            const sessionCapSeconds =
+                result.maxDurationSeconds ?? MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE;
+            maxDurationRef.current = sessionCapSeconds;
+            setMaxDurationSeconds(sessionCapSeconds);
+
             // The level the SERVER stored, not the one the screen proposed: the
             // simulation the student lives has to match the row the thesis reads.
             const level = getDifficultyLevel(result.difficultyLevel);
@@ -670,8 +687,7 @@ export function useVapi(book: IBook) {
                 },
                 // Vapi's own cap, pinned so the dashboard default (10 min) can
                 // never end a session before the app's limit does.
-                maxDurationSeconds:
-                    MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE + VAPI_MAX_DURATION_BUFFER_SECONDS,
+                maxDurationSeconds: sessionCapSeconds + VAPI_MAX_DURATION_BUFFER_SECONDS,
                 // Research sessions keep transcripts and metrics, but no audio
                 // recording is created or exposed.
                 artifactPlan: {

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
     id: text('id').primaryKey(),
@@ -9,6 +9,9 @@ export const users = pgTable('users', {
     // Thesis instrumentation: links this account with the external surveys.
     participantCode: text('participant_code').unique(),
     studyGroup: text('study_group'), // 'experimental' | 'control'
+    // Personal cap on total voice-agent minutes for this account, set by the
+    // admin. NULL = the global cap in `app_settings` applies (lib/study/usage.ts).
+    voiceMinutesLimit: integer('voice_minutes_limit'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

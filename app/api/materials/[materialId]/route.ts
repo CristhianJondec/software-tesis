@@ -18,7 +18,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ mat
     if (!context) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!context.hasMaterialsAccess) {
+    // The O₁ baseline must be measured before any exposure to the materials.
+    if (!context.hasMaterialsAccess || !context.baselineComplete) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

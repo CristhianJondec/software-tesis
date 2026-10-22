@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '@/database/db';
-import { users } from '@/database/schema';
+import { surveyResponses, users } from '@/database/schema';
 import { configuredAdminEmail } from '@/lib/admin/access';
 import { researchOwnerEmails } from '@/lib/metrics/access';
 import { getSession } from '@/lib/session';
@@ -30,6 +30,29 @@ export interface StudyContext {
     hasInterventionAccess: boolean;
     /** Researchers and the control arm. Experimental participants are false. */
     hasMaterialsAccess: boolean;
+    /**
+     * Whether the O₁ baseline (STAI T1 + PRCS-12 T1) is submitted. Participants
+     * cannot reach the agent or the materials before it, so the baseline is
+     * always measured before any exposure. Researchers are always true.
+     */
+    baselineComplete: boolean;
+}
+
+/** Path participants are sent to while the O₁ baseline is still missing. */
+export const BASELINE_PATH = '/surveys';
+
+async function hasCompletedBaseline(userId: string): Promise<boolean> {
+    const rows = await db
+        .select({ surveyType: surveyResponses.surveyType })
+        .from(surveyResponses)
+        .where(
+            and(
+                eq(surveyResponses.userId, userId),
+                eq(surveyResponses.phase, 'T1'),
+                inArray(surveyResponses.surveyType, ['STAI', 'PRCS12']),
+            ),
+        );
+    return new Set(rows.map((row) => row.surveyType)).size === 2;
 }
 
 function isResearcherEmail(email: string): boolean {
@@ -52,6 +75,7 @@ export async function getStudyContext(): Promise<StudyContext | null> {
 
     const group = normalizeStudyGroup(rows[0]?.studyGroup);
     const isResearcher = isResearcherEmail(email);
+    const baselineComplete = isResearcher || (group !== null && (await hasCompletedBaseline(session.user.id)));
 
     return {
         userId: session.user.id,
@@ -60,6 +84,7 @@ export async function getStudyContext(): Promise<StudyContext | null> {
         isResearcher,
         hasInterventionAccess: isResearcher || group === 'experimental',
         hasMaterialsAccess: isResearcher || group === 'control',
+        baselineComplete,
     };
 }
 
@@ -72,7 +97,10 @@ export async function getStudyContext(): Promise<StudyContext | null> {
 export async function guardInterventionPage(): Promise<StudyContext> {
     const context = await getStudyContext();
     if (!context) redirect('/sign-in');
-    if (context.hasInterventionAccess) return context;
+    if (context.hasInterventionAccess) {
+        if (!context.baselineComplete) redirect(BASELINE_PATH);
+        return context;
+    }
     redirect(context.group === 'control' ? '/materiales' : '/sin-asignar');
 }
 
@@ -83,7 +111,11 @@ export async function guardInterventionPage(): Promise<StudyContext> {
  */
 export async function redirectIfOutsideIntervention(): Promise<StudyContext | null> {
     const context = await getStudyContext();
-    if (!context || context.hasInterventionAccess) return context;
+    if (!context) return context;
+    if (context.hasInterventionAccess) {
+        if (!context.baselineComplete) redirect(BASELINE_PATH);
+        return context;
+    }
     redirect(context.group === 'control' ? '/materiales' : '/sin-asignar');
 }
 
@@ -102,7 +134,10 @@ export async function guardParticipantPage(): Promise<StudyContext> {
 export async function guardMaterialsPage(): Promise<StudyContext> {
     const context = await getStudyContext();
     if (!context) redirect('/sign-in');
-    if (context.hasMaterialsAccess) return context;
+    if (context.hasMaterialsAccess) {
+        if (!context.baselineComplete) redirect(BASELINE_PATH);
+        return context;
+    }
     redirect(context.group === 'experimental' ? '/' : '/sin-asignar');
 }
 
@@ -120,6 +155,9 @@ export async function requireInterventionAccess(): Promise<StudyContext> {
                 ? 'Tu cuenta pertenece al grupo control: no tiene acceso al agente de voz.'
                 : 'Tu cuenta todavía no tiene un grupo asignado. Espera a que el investigador la habilite.',
         );
+    }
+    if (!context.baselineComplete) {
+        throw new Error('Completa primero las encuestas iniciales (STAI T1 y PRCS-12 T1).');
     }
     return context;
 }

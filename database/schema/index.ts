@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './appSettings';
 export * from './books';
 export * from './bookSegments';
 export * from './bookTopicCoverage';

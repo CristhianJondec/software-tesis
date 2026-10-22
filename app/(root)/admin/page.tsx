@@ -3,6 +3,8 @@ import { Check, Circle, Clock3, LockKeyhole, Minus, ShieldCheck, UsersRound } fr
 import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
 import MaterialsManager from '@/components/admin/MaterialsManager';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
+import VoiceLimitInput from '@/components/admin/VoiceLimitInput';
+import { getVoiceUsageOverview } from '@/lib/actions/study.actions';
 import { checkAdminAccess } from '@/lib/admin/access';
 import { listStudyMaterialsForAdmin } from '@/lib/actions/material.actions';
 import { getAdminSurveyOverview, type SurveyStageStatus } from '@/lib/actions/survey.actions';
@@ -25,6 +27,10 @@ function score(value: number | null): string {
     return value === null ? '—' : String(value);
 }
 
+function formatMinutes(seconds: number): string {
+    return `${Math.round((seconds / 60) * 10) / 10} min`;
+}
+
 export default async function AdminPage() {
     const access = await checkAdminAccess();
     if (!access.allowed) {
@@ -39,9 +45,10 @@ export default async function AdminPage() {
         );
     }
 
-    const [result, materialsResult] = await Promise.all([
+    const [result, materialsResult, usageResult] = await Promise.all([
         getAdminSurveyOverview(),
         listStudyMaterialsForAdmin(),
+        getVoiceUsageOverview(),
     ]);
     if (!result.success || !result.data) {
         return (
@@ -54,6 +61,8 @@ export default async function AdminPage() {
 
     const users = result.data;
     const materials = materialsResult.success ? materialsResult.data ?? [] : [];
+    const usage = usageResult.success ? usageResult.data : undefined;
+    const globalLimit = usage?.globalLimitMinutes ?? null;
     const unassignedCount = users.filter((user) => normalizeStudyGroup(user.studyGroup) === null).length;
     const completedUsers = users.filter((user) =>
         user.stages.filter((stage) => stage.status !== 'not_applicable').every((stage) => stage.status === 'completed'),
@@ -115,6 +124,26 @@ export default async function AdminPage() {
 
             <section className="mb-10">
                 <div className="mb-4">
+                    <h2 className="font-serif text-2xl font-bold">Tiempo de uso del agente</h2>
+                    <p className="subtitle mt-2 max-w-3xl">
+                        Minutos totales de conversación por voz que puede usar cada cuenta, sumando todas sus sesiones.
+                        Todos parten con el <strong>límite general</strong>; si un participante tiene un{' '}
+                        <strong>límite personal</strong> (columna «Límite agente» de la tabla), ese tiene prioridad.
+                        Deja el campo vacío para quitar el límite.
+                    </p>
+                </div>
+                {!usageResult.success && <p className="mb-3 text-sm text-red-700">{usageResult.error}</p>}
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+                    <span className="text-sm font-semibold">Límite general (minutos)</span>
+                    <VoiceLimitInput value={globalLimit} placeholder="Sin límite" label="Límite general" />
+                    <span className="text-sm text-[var(--text-secondary)]">
+                        {globalLimit === null ? 'Actualmente sin límite.' : `Actualmente ${globalLimit} minutos por cuenta.`}
+                    </span>
+                </div>
+            </section>
+
+            <section className="mb-10">
+                <div className="mb-4">
                     <h2 className="font-serif text-2xl font-bold">Materiales compartidos</h2>
                     <p className="subtitle mt-2 max-w-3xl">
                         Documentos PDF que acompañan a la guía escrita en la vista <strong>Materiales</strong> para el
@@ -139,11 +168,12 @@ export default async function AdminPage() {
                             <h2 className="font-serif text-xl font-bold">Resumen para análisis</h2>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1050px] text-left text-sm">
+                            <table className="w-full min-w-[1200px] text-left text-sm">
                                 <thead className="bg-[#fff6e5]">
                                     <tr>
                                         <th className="px-4 py-3">Participante</th>
                                         <th className="w-40 px-4 py-3">Grupo</th>
+                                        <th className="px-4 py-3">Límite agente (min)</th>
                                         <th className="px-4 py-3 text-center">AE T1</th>
                                         <th className="px-4 py-3 text-center">AE T2</th>
                                         <th className="px-4 py-3 text-center">Δ AE</th>
@@ -167,6 +197,17 @@ export default async function AdminPage() {
                                                     value={normalizeStudyGroup(user.studyGroup)}
                                                     participantLabel={user.participantCode ?? user.name}
                                                 />
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <VoiceLimitInput
+                                                    userId={user.id}
+                                                    value={usage?.users[user.id]?.personalLimitMinutes ?? null}
+                                                    placeholder={globalLimit === null ? 'General' : String(globalLimit)}
+                                                    label={`Límite de ${user.participantCode ?? user.name}`}
+                                                />
+                                                <p className="mt-1 whitespace-nowrap text-xs text-[var(--text-secondary)]">
+                                                    Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
+                                                </p>
                                             </td>
                                             <td className="px-4 py-3 text-center">{score(user.scores.aeT1)}</td>
                                             <td className="px-4 py-3 text-center">{score(user.scores.aeT2)}</td>

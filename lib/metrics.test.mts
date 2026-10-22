@@ -356,8 +356,8 @@ describe('computeRagasForTriple', () => {
                 }
             );
         }
-        if (prompt.includes('preguntas distintas')) {
-            return overrides.questions ?? { preguntas: ['¿Cuál es la muestra?'], evasiva: false };
+        if (prompt.includes('frases de búsqueda distintas')) {
+            return overrides.questions ?? { temas: ['tamaño de la muestra'], evasiva: false };
         }
         if (prompt.includes('aportó información útil')) {
             return (
@@ -412,7 +412,7 @@ describe('computeRagasForTriple', () => {
 
     it('scores an evasive answer as irrelevant without embedding it', async () => {
         const { scores, detail } = await computeRagasForTriple(triple, {
-            judge: stubJudge({ questions: { preguntas: [], evasiva: true } }),
+            judge: stubJudge({ questions: { temas: [], evasiva: true } }),
             embed: async () => {
                 throw new Error('no debería embeber una respuesta evasiva');
             },

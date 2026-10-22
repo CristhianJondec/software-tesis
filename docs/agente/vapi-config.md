@@ -220,6 +220,15 @@ la búsqueda funciona pero la recuperación no queda registrada**, y sin ese reg
 El prompt instruye al modelo a pasar `{{bookId}}` y `{{sessionId}}` literalmente; las tres
 propiedades van en `required` para que el modelo no las omita.
 
+**El webhook ya no depende de que el modelo copie bien esos IDs.** Son cadenas aleatorias de
+21 caracteres, y un solo carácter mal copiado buscaba en otro documento (o en ninguno) y
+perdía el registro para RAGAs. Ahora la ruta identifica la sesión con, en este orden: el id
+de la llamada de Vapi (`message.call.id`, guardado por `linkVapiCall`), el `sessionId` de
+`variableValues` que viaja en la llamada y, por último, el `sessionId` que escribió el
+modelo. El `bookId` sale **siempre** de la fila de `voice_sessions`; los argumentos del
+modelo solo se usan si nada de lo anterior coincide con una sesión guardada
+(`resolveSearchCallContext` en `lib/retrievals.ts`).
+
 ---
 
 ## Webhook

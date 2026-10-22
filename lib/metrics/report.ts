@@ -1,8 +1,13 @@
 import {
     ARCHITECTURE_COMPONENTS,
     computeIca,
+    computeObservedIca,
+    observeSessionComponents,
+    sessionIcaPercentage,
     type ArchitectureComponent,
+    type ArchitectureComponentId,
     type IcaResult,
+    type ObservedIcaResult,
 } from './architecture';
 import {
     EMPTY_LATENCY_SUMMARY,
@@ -77,6 +82,10 @@ export interface SessionReport {
     turns: number;
     agentTurns: number;
     studentTurns: number;
+    /** Architecture components observed in this session (observed ICA). */
+    icaComponents: ArchitectureComponentId[];
+    /** Observed (Ci / Ct) × 100 for this session. Null when it has no turns. */
+    icaPercentage: number | null;
     systemLatency: LatencySummary;
     studentLatency: LatencySummary;
     precision: PrecisionResult;
@@ -111,7 +120,10 @@ export interface ParticipantReport {
 export interface MetricsReport {
     generatedAt: Date;
     ragasPromptVersion: string;
+    /** Declared ICA, from the registry. */
     ica: IcaResult;
+    /** Observed ICA, from what each session left in the database. Cite this one. */
+    observedIca: ObservedIcaResult;
     components: readonly ArchitectureComponent[];
     systemLatency: LatencySummary;
     studentLatency: LatencySummary;
@@ -220,6 +232,29 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
         else turnsBySession.set(turn.sessionId, [turn]);
     }
 
+    // --- Observed ICA -------------------------------------------------------
+    const retrievalsBySession = new Map<string, number>();
+    for (const row of retrievals) {
+        if (!row.sessionId) continue;
+        retrievalsBySession.set(row.sessionId, (retrievalsBySession.get(row.sessionId) ?? 0) + 1);
+    }
+    const triplesBySession = new Map<string, number>();
+    for (const triple of triples) {
+        triplesBySession.set(triple.sessionId, (triplesBySession.get(triple.sessionId) ?? 0) + 1);
+    }
+    const componentsBySession = new Map<string, ArchitectureComponentId[]>();
+    for (const [sessionId, sessionTurnList] of turnsBySession) {
+        componentsBySession.set(
+            sessionId,
+            observeSessionComponents({
+                turns: sessionTurnList,
+                retrievals: retrievalsBySession.get(sessionId) ?? 0,
+                groundedReplies: triplesBySession.get(sessionId) ?? 0,
+            }),
+        );
+    }
+    const observedIca = computeObservedIca([...componentsBySession.values()]);
+
     const ragasTurnToSession = new Map(triples.map((t) => [t.answerTurnId, t.sessionId]));
     const ragasRowsBySession = new Map<string, MetricsRagasRow[]>();
     for (const row of ragasRows) {
@@ -247,6 +282,7 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
         const sessionStudentTurns = sessionTurnList.filter((t) => t.role === 'user');
         const sessionRagasRows = ragasRowsBySession.get(session.sessionId);
         const sessionFeedbackRows = feedbackBySession.get(session.sessionId);
+        const icaComponents = componentsBySession.get(session.sessionId);
 
         return {
             sessionId: session.sessionId,
@@ -265,6 +301,8 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
             turns: sessionTurnList.length,
             agentTurns: sessionAgentTurns.length,
             studentTurns: sessionStudentTurns.length,
+            icaComponents: icaComponents ?? [],
+            icaPercentage: icaComponents ? sessionIcaPercentage(icaComponents) : null,
             systemLatency: summarizeLatency(sessionAgentTurns.map((t) => t.systemLatencyMs)),
             studentLatency: summarizeLatency(sessionStudentTurns.map((t) => t.studentLatencyMs)),
             precision: computePrecision({
@@ -332,6 +370,7 @@ export function buildMetricsReport(input: MetricsInput): MetricsReport {
         generatedAt: new Date(),
         ragasPromptVersion: RAGAS_PROMPT_VERSION,
         ica,
+        observedIca,
         components: ARCHITECTURE_COMPONENTS,
         systemLatency,
         studentLatency,

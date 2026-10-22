@@ -9,38 +9,56 @@
  * hubiera ejecutado `ragas`. La nota metodológica completa va en
  * `docs/arquitectura.md` (doc 05); este comentario es su contraparte en código.
  *
+ * ROLES INVERTIDOS (desde `ragas-ts-v2`). RAGAs supone un asistente que RESPONDE
+ * a la pregunta de un usuario. Aquí es al revés: el agente es un docente
+ * evaluador que PREGUNTA, anclado en el documento del estudiante, y quien
+ * responde es el estudiante. Aplicar RAGAs al pie de la letra medía cosas sin
+ * sentido: la "pregunta" era la respuesta del estudiante, y una intervención que
+ * termina en pregunta se marcaba como evasiva (pertinencia 0 por diseño). Por
+ * eso, en todas las métricas:
+ *
+ *  - la "respuesta" evaluada es la INTERVENCIÓN DEL DOCENTE (turno del agente);
+ *  - la "pregunta" es el TEMA CONSULTADO: la `query` que el propio agente envió
+ *    al recuperador. Es el único texto que expresa qué información buscaba el
+ *    sistema, y existe para toda recuperación registrada.
+ *
  * Fórmulas seguidas, y en qué se apartan de la implementación oficial:
  *
  * 1. FAITHFULNESS — fiel al algoritmo original.
- *    El juez descompone la respuesta en afirmaciones atómicas SIN ver el
+ *    El juez descompone la intervención en afirmaciones atómicas SIN ver el
  *    contexto; luego, en una segunda llamada, verifica cada afirmación contra
  *    el contexto recuperado. Puntaje = afirmaciones respaldadas / totales.
  *    La separación en dos llamadas es deliberada: si el juez viera el contexto
  *    al extraer, extraería justamente lo que el contexto respalda.
+ *    Particularidad del dominio: lo que la intervención atribuye al documento
+ *    dentro de una pregunta ("en la página 34 afirmas que…") cuenta como
+ *    afirmación, porque es justamente lo que debe estar anclado.
  *
- * 2. ANSWER RELEVANCY — fiel al algoritmo original.
- *    El juez genera N preguntas para las que la respuesta sería adecuada; se
- *    embeben con el mismo modelo del retriever (Gemini gemini-embedding-001) y se
- *    promedia su similitud coseno con la pregunta real. Una respuesta evasiva
- *    ("no lo sé") puntúa 0. DESVÍO: la implementación oficial usa por defecto
- *    N = 3 y el modelo de embeddings de OpenAI; aquí N = 3 con el embebedor ya
- *    configurado en el proyecto, para no introducir un segundo proveedor.
+ * 2. ANSWER RELEVANCY — fiel al mecanismo, distinto en lo que se compara.
+ *    El juez genera N frases de búsqueda que describen el tema del documento
+ *    sobre el que trata la intervención; se embeben con el mismo modelo del
+ *    retriever (Gemini gemini-embedding-001) y se promedia su similitud coseno
+ *    con el tema consultado. Mide si el docente habló de lo que fue a buscar.
+ *    Una intervención que no se compromete con ningún contenido del documento
+ *    puntúa 0. DESVÍOS: el original genera preguntas y las compara con la
+ *    pregunta del usuario, y usa por defecto el embebedor de OpenAI. N = 3.
  *
  * 3. CONTEXT PRECISION — fiel a la fórmula, distinto en la referencia.
  *    Precisión promedio (average precision@K) sobre los fragmentos en el orden
  *    en que el retriever los devolvió. DESVÍO: la versión oficial juzga la
  *    utilidad de cada fragmento contra el `ground_truth`; aquí no existe una
- *    respuesta de referencia escrita a mano, así que se juzga contra la
- *    pregunta y la respuesta efectivamente dada.
+ *    respuesta de referencia escrita a mano, así que se juzga contra el tema
+ *    consultado y la intervención efectivamente dada.
  *
  * 4. CONTEXT RECALL — ADAPTACIÓN, es el desvío más grande de los cuatro.
  *    La versión oficial descompone el `ground_truth` en oraciones y mide cuántas
  *    son atribuibles al contexto recuperado. Este proyecto no tiene ground truth:
  *    las sustentaciones son conversaciones espontáneas, no un dataset anotado.
- *    En su lugar, el juez descompone la PREGUNTA en los requisitos de
- *    información que exige y mide cuántos están cubiertos por el contexto
- *    recuperado. Mide lo mismo conceptualmente —"¿se recuperó lo necesario?"—
- *    pero NO es el mismo cálculo, y así debe reportarse.
+ *    En su lugar, el juez descompone el TEMA CONSULTADO en los requisitos de
+ *    información que un jurado necesita leer del documento para preguntar
+ *    sobre él, y mide cuántos están cubiertos por el contexto recuperado. Mide
+ *    lo mismo conceptualmente —"¿se recuperó lo necesario?"— pero NO es el
+ *    mismo cálculo, y así debe reportarse.
  *
  * Reproducibilidad: los prompts del juez son fijos y están versionados en
  * `RAGAS_PROMPT_VERSION`. Cambiar un prompt obliga a subir la versión, lo que
@@ -59,33 +77,39 @@ import type { RagasTriple } from './triples';
  * scores computed with different prompts are different measurements and must
  * not be averaged together.
  */
-export const RAGAS_PROMPT_VERSION = 'ragas-ts-v1';
+export const RAGAS_PROMPT_VERSION = 'ragas-ts-v2';
 
-/** Questions generated per answer for answer relevancy (N in the original paper). */
+/** Search phrases generated per intervention for answer relevancy (N in the original paper). */
 export const RELEVANCY_QUESTIONS = 3;
 
 // ============================================================================
 // Judge prompts (fixed and versioned)
 // ============================================================================
 
-export const PROMPT_EXTRACT_CLAIMS = `Eres un evaluador de sistemas de recuperación de información.
+// Shared framing: the judge must know the "answer" is an examiner's turn, or it
+// reads every question put back to the student as a non-answer.
+const JUDGE_ROLE = `Eres un evaluador de sistemas de recuperación de información. El sistema evaluado es un docente evaluador que simula el jurado de una sustentación: antes de intervenir consulta un TEMA en el documento del estudiante, recupera fragmentos de ese documento y formula una INTERVENCIÓN (normalmente una pregunta al estudiante) anclada en ellos.`;
 
-Descompón la RESPUESTA en afirmaciones atómicas: enunciados simples, cada uno verificable por separado, sin pronombres sin antecedente. No agregues información que no esté en la respuesta. Ignora saludos, muletillas y preguntas que la respuesta le haga al estudiante: no son afirmaciones.
+export const PROMPT_EXTRACT_CLAIMS = `${JUDGE_ROLE}
 
-PREGUNTA:
+Descompón la INTERVENCIÓN en afirmaciones atómicas: enunciados simples, cada uno verificable por separado, sin pronombres sin antecedente. No agregues información que no esté en la intervención.
+
+Incluye lo que la intervención atribuye al documento aunque aparezca dentro de una pregunta: "En la página 34 afirmas que la muestra es de 30 estudiantes, ¿por qué?" contiene la afirmación "El documento afirma, en la página 34, que la muestra es de 30 estudiantes". Ignora saludos, acuses de recibo ("De acuerdo.") y la parte puramente interrogativa: no son afirmaciones.
+
+TEMA CONSULTADO:
 {{question}}
 
-RESPUESTA:
+INTERVENCIÓN:
 {{answer}}
 
 Devuelve exclusivamente este JSON:
 {"afirmaciones": ["afirmación 1", "afirmación 2"]}
 
-Si la respuesta no contiene ninguna afirmación verificable, devuelve {"afirmaciones": []}.`;
+Si la intervención no contiene ninguna afirmación verificable, devuelve {"afirmaciones": []}.`;
 
-export const PROMPT_VERIFY_CLAIMS = `Eres un evaluador de sistemas de recuperación de información.
+export const PROMPT_VERIFY_CLAIMS = `${JUDGE_ROLE}
 
-Para cada afirmación, decide si puede deducirse del CONTEXTO. Sé estricto: si el contexto no la respalda directamente, la afirmación NO está respaldada, aunque parezca cierta o razonable en general.
+Para cada afirmación, decide si puede deducirse del CONTEXTO. Sé estricto: si el contexto no la respalda directamente, la afirmación NO está respaldada, aunque parezca cierta o razonable en general. Una cita de página solo está respaldada si el fragmento de esa página dice lo afirmado.
 
 CONTEXTO:
 {{context}}
@@ -96,26 +120,26 @@ AFIRMACIONES (numeradas desde 0):
 Devuelve exclusivamente este JSON, con un objeto por afirmación y en el mismo orden:
 {"veredictos": [{"indice": 0, "respaldada": true, "razon": "breve"}]}`;
 
-export const PROMPT_GENERATE_QUESTIONS = `Eres un evaluador de sistemas de recuperación de información.
+export const PROMPT_GENERATE_QUESTIONS = `${JUDGE_ROLE}
 
-Lee la RESPUESTA y escribe ${RELEVANCY_QUESTIONS} preguntas distintas para las cuales esa respuesta sería adecuada. Básate solo en la respuesta, no inventes contexto.
+Lee la INTERVENCIÓN y escribe ${RELEVANCY_QUESTIONS} frases de búsqueda distintas que describan el tema del documento del estudiante sobre el que trata (por ejemplo "tamaño y selección de la muestra"). Básate solo en la intervención, no inventes contexto.
 
-Marca "evasiva" como true si la respuesta no se compromete con ningún contenido: dice que no sabe, cambia de tema o solo devuelve la pregunta al estudiante.
+Que la intervención termine en una pregunta al estudiante es lo esperado y NO la hace evasiva. Marca "evasiva" como true solo si la intervención no se compromete con ningún contenido del documento: un saludo, un acuse de recibo sin más, o una pregunta genérica que serviría para cualquier investigación.
 
-RESPUESTA:
+INTERVENCIÓN:
 {{answer}}
 
 Devuelve exclusivamente este JSON:
-{"preguntas": ["pregunta 1", "pregunta 2", "pregunta 3"], "evasiva": false}`;
+{"temas": ["frase 1", "frase 2", "frase 3"], "evasiva": false}`;
 
-export const PROMPT_CONTEXT_PRECISION = `Eres un evaluador de sistemas de recuperación de información.
+export const PROMPT_CONTEXT_PRECISION = `${JUDGE_ROLE}
 
-Para cada FRAGMENTO recuperado, decide si aportó información útil para responder la PREGUNTA con la RESPUESTA dada. Un fragmento del mismo documento pero sobre otro tema NO es útil.
+Para cada FRAGMENTO recuperado, decide si aportó información útil para formular la INTERVENCIÓN sobre el TEMA CONSULTADO. Un fragmento del mismo documento pero sobre otro tema NO es útil.
 
-PREGUNTA:
+TEMA CONSULTADO:
 {{question}}
 
-RESPUESTA:
+INTERVENCIÓN:
 {{answer}}
 
 FRAGMENTOS (numerados desde 0, en el orden en que los devolvió el recuperador):
@@ -124,19 +148,19 @@ FRAGMENTOS (numerados desde 0, en el orden en que los devolvió el recuperador):
 Devuelve exclusivamente este JSON, con un objeto por fragmento y en el mismo orden:
 {"veredictos": [{"indice": 0, "util": true, "razon": "breve"}]}`;
 
-export const PROMPT_EXTRACT_REQUIREMENTS = `Eres un evaluador de sistemas de recuperación de información.
+export const PROMPT_EXTRACT_REQUIREMENTS = `${JUDGE_ROLE}
 
-Enumera los requisitos de información que hay que conocer del documento del estudiante para responder la PREGUNTA de forma completa. Cada requisito debe ser un enunciado corto y verificable. No respondas la pregunta.
+Enumera los requisitos de información que un jurado necesita leer en el documento del estudiante para poder preguntarle con fundamento sobre el TEMA CONSULTADO. Cada requisito debe ser un enunciado corto y verificable. No inventes el contenido del documento.
 
-PREGUNTA:
+TEMA CONSULTADO:
 {{question}}
 
 Devuelve exclusivamente este JSON:
 {"requisitos": ["requisito 1", "requisito 2"]}
 
-Si la pregunta no exige información del documento (por ejemplo, un saludo), devuelve {"requisitos": []}.`;
+Si el tema no exige información del documento, devuelve {"requisitos": []}.`;
 
-export const PROMPT_VERIFY_REQUIREMENTS = `Eres un evaluador de sistemas de recuperación de información.
+export const PROMPT_VERIFY_REQUIREMENTS = `${JUDGE_ROLE}
 
 Para cada REQUISITO, decide si el CONTEXTO recuperado contiene la información necesaria para cubrirlo. Sé estricto: que el contexto mencione el tema no basta si no aporta el dato.
 
@@ -272,7 +296,7 @@ export const RAGAS_METRIC_IDS: readonly RagasMetricId[] = [
 /** Spanish labels for the UI and the research tables. */
 export const RAGAS_METRIC_LABELS: Record<RagasMetricId, string> = {
     faithfulness: 'Faithfulness (fidelidad al contexto)',
-    answerRelevancy: 'Answer relevancy (pertinencia de la respuesta)',
+    answerRelevancy: 'Answer relevancy (pertinencia de la intervención al tema consultado)',
     contextPrecision: 'Context precision (precisión del contexto)',
     contextRecall: 'Context recall (cobertura del contexto)',
 };
@@ -375,6 +399,9 @@ export async function computeRagasForTriple(
 
     const context = joinContexts(triple);
     const hasContext = triple.contexts.length > 0;
+    // The "question" of every metric is the topic the agent searched for, not the
+    // student's turn: the agent asks, the student answers (see the header note).
+    const topic = triple.query;
 
     const record = (metric: string, error: unknown) => {
         detail.errors!.push(`${metric}: ${(error as Error).message ?? String(error)}`);
@@ -385,7 +412,7 @@ export async function computeRagasForTriple(
         try {
             const extracted = (await deps.judge(
                 fillTemplate(PROMPT_EXTRACT_CLAIMS, {
-                    question: triple.question,
+                    question: topic,
                     answer: triple.answer,
                 }),
             )) as Record<string, unknown>;
@@ -416,18 +443,18 @@ export async function computeRagasForTriple(
             fillTemplate(PROMPT_GENERATE_QUESTIONS, { answer: triple.answer }),
         )) as Record<string, unknown>;
 
-        const questions = asStringArray(generated?.preguntas).slice(0, RELEVANCY_QUESTIONS);
+        const questions = asStringArray(generated?.temas).slice(0, RELEVANCY_QUESTIONS);
         const noncommittal = generated?.evasiva === true;
         detail.generatedQuestions = questions;
         detail.noncommittal = noncommittal;
 
         if (noncommittal) {
             // Original RAGAs behaviour: an evasive answer is maximally irrelevant,
-            // no matter how well it paraphrases the question.
+            // no matter how well it paraphrases the topic.
             scores.answerRelevancy = 0;
         } else if (questions.length > 0) {
             const [questionVector, ...generatedVectors] = await Promise.all([
-                deps.embed(triple.question),
+                deps.embed(topic),
                 ...questions.map((q) => deps.embed(q)),
             ]);
             const similarities = generatedVectors.map((vector) =>
@@ -445,7 +472,7 @@ export async function computeRagasForTriple(
         try {
             const judged = (await deps.judge(
                 fillTemplate(PROMPT_CONTEXT_PRECISION, {
-                    question: triple.question,
+                    question: topic,
                     answer: triple.answer,
                     context,
                 }),
@@ -466,7 +493,7 @@ export async function computeRagasForTriple(
     if (hasContext) {
         try {
             const extracted = (await deps.judge(
-                fillTemplate(PROMPT_EXTRACT_REQUIREMENTS, { question: triple.question }),
+                fillTemplate(PROMPT_EXTRACT_REQUIREMENTS, { question: topic }),
             )) as Record<string, unknown>;
 
             const requirements = asStringArray(extracted?.requisitos);

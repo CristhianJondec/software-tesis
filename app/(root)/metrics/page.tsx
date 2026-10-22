@@ -82,8 +82,9 @@ const MetricsPage = async () => {
 
             {!hasTurns && (
                 <div className="mt-6 rounded-xl border border-dashed border-black/20 bg-white/60 p-6 text-sm leading-6 text-[var(--text-secondary)]">
-                    Todavía no hay turnos registrados. El ICA ya es medible porque describe la
-                    arquitectura; LP, PR y RAGAs necesitan al menos una sesión de voz completa.
+                    Todavía no hay turnos registrados. El ICA declarado ya es medible porque describe
+                    la arquitectura; el ICA observado, LP, PR y RAGAs necesitan al menos una sesión de
+                    voz completa.
                 </div>
             )}
 
@@ -91,11 +92,21 @@ const MetricsPage = async () => {
             <Section
                 title="ICA — Índice de Completitud Arquitectónica"
                 formula="(Ci / Ct) × 100"
-                description="Se deriva del registro declarativo de lib/metrics/architecture.ts. Si un componente deja de estar integrado, el porcentaje baja solo."
+                description="El ICA observado se mide en cada sesión de voz: cuenta qué componentes dejaron rastro en la base de datos durante esa conversación (criterio en la columna «Se observa cuando»). El declarado solo describe el diseño de lib/metrics/architecture.ts. En la investigación, cita el observado."
             >
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <StatCard
-                        label="ICA"
+                        label="ICA observado (media por sesión)"
+                        value={formatPercent(report.observedIca.meanPercentage)}
+                        hint={`n = ${report.observedIca.sessions} sesiones con turnos`}
+                    />
+                    <StatCard
+                        label="Sesiones con el ciclo completo"
+                        value={formatPercent(report.observedIca.completePercentage)}
+                        hint={`${report.observedIca.completeSessions} de ${report.observedIca.sessions} con los 5 componentes`}
+                    />
+                    <StatCard
+                        label="ICA declarado"
                         value={formatPercent(report.ica.percentage)}
                         hint={`Ci = ${report.ica.integrated} · Ct = ${report.ica.total}`}
                     />
@@ -110,6 +121,8 @@ const MetricsPage = async () => {
                                 <th className={th}>Corre en</th>
                                 <th className={th}>Evidencia</th>
                                 <th className={th}>Estado</th>
+                                <th className={th}>Se observa cuando</th>
+                                <th className={th}>Sesiones donde se observó</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -125,6 +138,11 @@ const MetricsPage = async () => {
                                     </td>
                                     <td className={td}>
                                         {component.integrated ? 'Integrado' : 'No integrado'}
+                                    </td>
+                                    <td className={`${td} whitespace-normal`}>{component.observedWhen}</td>
+                                    <td className={td}>
+                                        {report.observedIca.sessionsByComponent[component.id]} de{' '}
+                                        {report.observedIca.sessions}
                                     </td>
                                 </tr>
                             ))}

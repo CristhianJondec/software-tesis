@@ -31,6 +31,9 @@ export default async function SurveysPage() {
     }
 
     const progress = result.data;
+    const baselinePending = progress.stages.some(
+        (stage) => (stage.id === 'stai-t1' || stage.id === 'prcs12-t1') && stage.status !== 'completed',
+    );
     const percent = progress.applicableCount === 0 ? 0 : Math.round((progress.completedCount / progress.applicableCount) * 100);
 
     return (
@@ -50,6 +53,12 @@ export default async function SurveysPage() {
                     </div>
                 )}
             </div>
+
+            {baselinePending && (
+                <p className="mb-6 rounded-xl border-l-4 border-[#d4a853] bg-white p-5 text-sm leading-6 text-[var(--text-secondary)] shadow-sm">
+                    Para continuar con el estudio, primero completa las dos encuestas iniciales (STAI T1 y PRCS-12 T1).
+                </p>
+            )}
 
             <section className="mb-8 rounded-2xl bg-[#212a3b] p-6 text-white shadow-md">
                 <div className="mb-3 flex items-center justify-between gap-4">

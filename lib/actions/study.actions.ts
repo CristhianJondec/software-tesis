@@ -1,12 +1,14 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { eq, sum } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
-import { users } from '@/database/schema';
+import { appSettings, users, voiceSessions } from '@/database/schema';
 import { requireAdmin } from '@/lib/admin/access';
 import { normalizeStudyGroup } from '@/lib/study/groups';
+import { GLOBAL_VOICE_LIMIT_KEY, parseVoiceLimitInput } from '@/lib/study/usage';
+import { readGlobalVoiceLimit } from '@/lib/study/usage.server';
 
 /**
  * Assigns a participant to an arm of the experiment.
@@ -73,5 +75,104 @@ export const setParticipantCode = async (
             success: false,
             error: duplicated ? 'Ese código ya está asignado a otro participante.' : 'No se pudo guardar el código.',
         };
+    }
+};
+
+// ============================================================================
+// Voice-agent time caps (rules in lib/study/usage.ts)
+// ============================================================================
+
+export interface VoiceUsageOverview {
+    /** Global cap in minutes. Null = unlimited. */
+    globalLimitMinutes: number | null;
+    /** Per account: personal cap (null = uses the global) and seconds used. */
+    users: Record<string, { personalLimitMinutes: number | null; usedSeconds: number }>;
+}
+
+export const getVoiceUsageOverview = async (): Promise<{
+    success: boolean;
+    data?: VoiceUsageOverview;
+    error?: string;
+}> => {
+    try {
+        await requireAdmin();
+
+        const [globalLimitMinutes, limits, usage] = await Promise.all([
+            readGlobalVoiceLimit(),
+            db.select({ id: users.id, limit: users.voiceMinutesLimit }).from(users),
+            db
+                .select({ userId: voiceSessions.userId, usedSeconds: sum(voiceSessions.durationSeconds) })
+                .from(voiceSessions)
+                .groupBy(voiceSessions.userId),
+        ]);
+
+        const usedByUser = new Map(usage.map((row) => [row.userId, Number(row.usedSeconds ?? 0)]));
+        const overview: VoiceUsageOverview['users'] = {};
+        for (const row of limits) {
+            overview[row.id] = { personalLimitMinutes: row.limit, usedSeconds: usedByUser.get(row.id) ?? 0 };
+        }
+
+        return { success: true, data: { globalLimitMinutes, users: overview } };
+    } catch (error) {
+        console.error('Error loading voice usage', error);
+        return { success: false, error: 'No se pudo cargar el uso del agente.' };
+    }
+};
+
+/** Sets the global cap every account starts with. Empty = no cap. */
+export const setGlobalVoiceLimit = async (
+    minutes: string | number | null,
+): Promise<{ success: boolean; error?: string }> => {
+    try {
+        await requireAdmin();
+
+        const parsed = parseVoiceLimitInput(minutes);
+        if (parsed === undefined) return { success: false, error: 'Indica un número entero de minutos.' };
+
+        if (parsed === null) {
+            await db.delete(appSettings).where(eq(appSettings.key, GLOBAL_VOICE_LIMIT_KEY));
+        } else {
+            await db
+                .insert(appSettings)
+                .values({ key: GLOBAL_VOICE_LIMIT_KEY, value: String(parsed), updatedAt: new Date() })
+                .onConflictDoUpdate({
+                    target: appSettings.key,
+                    set: { value: String(parsed), updatedAt: new Date() },
+                });
+        }
+
+        revalidatePath('/admin');
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting global voice limit', error);
+        return { success: false, error: 'No se pudo guardar el límite general.' };
+    }
+};
+
+/** Sets a personal cap that overrides the global one. Empty = back to the global. */
+export const setUserVoiceLimit = async (
+    userId: string,
+    minutes: string | number | null,
+): Promise<{ success: boolean; error?: string }> => {
+    try {
+        await requireAdmin();
+
+        if (!userId?.trim()) return { success: false, error: 'Falta el participante.' };
+        const parsed = parseVoiceLimitInput(minutes);
+        if (parsed === undefined) return { success: false, error: 'Indica un número entero de minutos.' };
+
+        const updated = await db
+            .update(users)
+            .set({ voiceMinutesLimit: parsed, updatedAt: new Date() })
+            .where(eq(users.id, userId))
+            .returning({ id: users.id });
+
+        if (updated.length === 0) return { success: false, error: 'El participante no existe.' };
+
+        revalidatePath('/admin');
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting user voice limit', error);
+        return { success: false, error: 'No se pudo guardar el límite del participante.' };
     }
 };

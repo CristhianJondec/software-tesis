@@ -2,7 +2,7 @@ import { NextResponse, after } from 'next/server';
 
 import { searchBookSegments } from '@/lib/actions/book.actions';
 import { RETRIEVER_TOP_K } from '@/lib/constants';
-import { recordTurnRetrievals } from '@/lib/retrievals';
+import { recordTurnRetrievals, resolveSearchCallContext } from '@/lib/retrievals';
 
 // Normalize an optional string argument coming from the Vapi tool call.
 // `sessionId` is optional on purpose: the tool schema in the Vapi dashboard may
@@ -12,6 +12,37 @@ function optionalString(value: unknown): string | null {
     const str = String(value).trim();
     if (!str || str === 'null' || str === 'undefined') return null;
     return str;
+}
+
+/**
+ * Picks the book and session a tool call really belongs to. The ids come from
+ * the call itself (see `resolveSearchCallContext`); the LLM's arguments are only
+ * used when the call cannot be matched to a stored session.
+ */
+async function resolveSearchTarget(
+    body: unknown,
+    args: Record<string, unknown>,
+): Promise<{ bookId: unknown; sessionId: unknown }> {
+    const call = (body as { message?: { call?: Record<string, unknown> } })?.message?.call;
+    const variables = (call?.assistantOverrides as { variableValues?: Record<string, unknown> } | undefined)
+        ?.variableValues;
+
+    const resolved = await resolveSearchCallContext({
+        vapiCallId: optionalString(call?.id),
+        sessionIds: [optionalString(variables?.sessionId), optionalString(args.sessionId)],
+    });
+
+    if (!resolved) {
+        return { bookId: variables?.bookId ?? args.bookId, sessionId: args.sessionId };
+    }
+
+    const argBookId = optionalString(args.bookId);
+    if (argBookId && argBookId !== resolved.bookId) {
+        console.warn(
+            `searchBook: the LLM passed bookId "${argBookId}", using the session's "${resolved.bookId}"`,
+        );
+    }
+    return resolved;
 }
 
 // Helper function to process book search logic
@@ -108,7 +139,8 @@ export async function POST(request: Request) {
             const parsed = parseArgs(parameters);
 
             if (name === 'searchBook') {
-                const result = await processBookSearch(parsed.bookId, parsed.query, parsed.sessionId);
+                const target = await resolveSearchTarget(body, parsed);
+                const result = await processBookSearch(target.bookId, parsed.query, target.sessionId);
                 return NextResponse.json(result);
             }
 
@@ -130,7 +162,8 @@ export async function POST(request: Request) {
             const args = parseArgs(func?.arguments);
 
             if (name === 'searchBook') {
-                const searchResult = await processBookSearch(args.bookId, args.query, args.sessionId);
+                const target = await resolveSearchTarget(body, args);
+                const searchResult = await processBookSearch(target.bookId, args.query, target.sessionId);
                 results.push({ toolCallId: id, ...searchResult });
             } else {
                 results.push({ toolCallId: id, result: `Unknown function: ${name}` });
