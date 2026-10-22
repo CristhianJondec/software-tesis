@@ -83,6 +83,9 @@ export default function SignUpPage() {
                             required
                             disabled={isPending}
                         />
+                        <p className="text-xs text-muted-foreground">
+                            Se recomienda usar tu correo institucional {ALLOWED_EMAIL_DOMAIN}.
+                        </p>
                     </div>
                     <div className="flex flex-col gap-2">
                         <Label htmlFor="password">Contraseña</Label>
