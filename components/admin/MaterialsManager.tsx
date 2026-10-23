@@ -99,8 +99,8 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
     };
 
     return (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_1fr]">
-            <form onSubmit={submit} className="grid h-fit gap-4 rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
+            <form onSubmit={submit} className="grid h-fit min-w-0 gap-4 rounded-xl border border-black/10 bg-white p-4 shadow-sm sm:p-5">
                 <div className="grid gap-2">
                     <Label htmlFor="material-title">Título</Label>
                     <Input
@@ -124,7 +124,15 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="material-file">Archivo PDF</Label>
-                    <Input id="material-file" ref={fileInput} type="file" accept="application/pdf" disabled={isUploading} required />
+                    <Input
+                        id="material-file"
+                        ref={fileInput}
+                        type="file"
+                        accept="application/pdf"
+                        disabled={isUploading}
+                        required
+                        className="h-auto py-2 text-sm file:mr-3 file:rounded-md file:bg-[#fff6e5] file:px-3 file:text-[#663820]"
+                    />
                 </div>
                 <Button type="submit" disabled={isUploading} className="bg-[#663820] hover:bg-[#7a4528]">
                     <Upload className="size-4" />
@@ -135,7 +143,7 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                 </p>
             </form>
 
-            <div className="rounded-xl border border-black/10 bg-white shadow-sm">
+            <div className="min-w-0 rounded-xl border border-black/10 bg-white shadow-sm">
                 {materials.length === 0 ? (
                     <p className="p-8 text-center text-sm text-[var(--text-secondary)]">
                         Aún no hay documentos publicados. La guía escrita se muestra igualmente.
@@ -143,25 +151,27 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                 ) : (
                     <ul className="divide-y divide-black/5">
                         {materials.map((material) => (
-                            <li key={material.id} className="flex flex-wrap items-start gap-3 p-4 sm:flex-nowrap sm:gap-4">
-                                <span className="mt-0.5 rounded-lg bg-[#fff6e5] p-2 text-[#663820]">
-                                    <FileText className="size-4" />
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <a
-                                        href={`/api/materials/${material.id}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-semibold text-[#212a3b] hover:underline"
-                                    >
-                                        {material.title}
-                                    </a>
-                                    {material.description && (
-                                        <p className="mt-0.5 text-sm text-[var(--text-secondary)]">{material.description}</p>
-                                    )}
-                                    <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
-                                        {material.fileName} · {formatSize(material.fileSize)}
-                                    </p>
+                            <li key={material.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:gap-4">
+                                <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+                                    <span className="mt-0.5 shrink-0 rounded-lg bg-[#fff6e5] p-2 text-[#663820]">
+                                        <FileText className="size-4" />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <a
+                                            href={`/api/materials/${material.id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block break-words font-semibold text-[#212a3b] hover:underline"
+                                        >
+                                            {material.title}
+                                        </a>
+                                        {material.description && (
+                                            <p className="mt-0.5 break-words text-sm text-[var(--text-secondary)]">{material.description}</p>
+                                        )}
+                                        <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
+                                            {material.fileName} · {formatSize(material.fileSize)}
+                                        </p>
+                                    </div>
                                 </div>
                                 <Button
                                     type="button"
@@ -169,7 +179,7 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                                     size="sm"
                                     disabled={isPending}
                                     onClick={() => remove(material)}
-                                    className="ml-auto shrink-0 text-red-700 hover:text-red-800"
+                                    className="w-full shrink-0 text-red-700 hover:text-red-800 sm:w-auto"
                                 >
                                     <Trash2 className="size-4" />
                                     Eliminar
