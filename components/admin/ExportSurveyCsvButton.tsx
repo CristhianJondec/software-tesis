@@ -31,7 +31,7 @@ export default function ExportSurveyCsvButton() {
     };
 
     return (
-        <Button type="button" onClick={download} disabled={isPending} className="bg-[#663820] hover:bg-[#7a4528]">
+        <Button type="button" onClick={download} disabled={isPending} className="w-full bg-[#663820] hover:bg-[#7a4528] sm:w-auto">
             <Download className="size-4" />
             {isPending ? 'Preparando…' : 'Exportar resumen CSV'}
         </Button>

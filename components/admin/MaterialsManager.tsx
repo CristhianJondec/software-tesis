@@ -143,7 +143,7 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                 ) : (
                     <ul className="divide-y divide-black/5">
                         {materials.map((material) => (
-                            <li key={material.id} className="flex items-start gap-4 p-4">
+                            <li key={material.id} className="flex flex-wrap items-start gap-3 p-4 sm:flex-nowrap sm:gap-4">
                                 <span className="mt-0.5 rounded-lg bg-[#fff6e5] p-2 text-[#663820]">
                                     <FileText className="size-4" />
                                 </span>
@@ -169,7 +169,7 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                                     size="sm"
                                     disabled={isPending}
                                     onClick={() => remove(material)}
-                                    className="shrink-0 text-red-700 hover:text-red-800"
+                                    className="ml-auto shrink-0 text-red-700 hover:text-red-800"
                                 >
                                     <Trash2 className="size-4" />
                                     Eliminar

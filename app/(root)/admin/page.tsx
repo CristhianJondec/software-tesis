@@ -88,39 +88,39 @@ export default async function AdminPage() {
                 <ExportSurveyCsvButton />
             </header>
 
-            <section className="mb-8 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
-                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Usuarios registrados</p>
-                    <p className="mt-2 font-serif text-3xl font-bold">{users.length}</p>
+            <section className="mb-8 grid grid-cols-3 gap-2 sm:gap-4">
+                <div className="rounded-xl border border-black/10 bg-white p-3 shadow-sm sm:p-5">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] sm:text-sm">Usuarios registrados</p>
+                    <p className="mt-2 font-serif text-2xl font-bold sm:text-3xl">{users.length}</p>
                 </div>
-                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
-                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Instrumentos completados</p>
-                    <p className="mt-2 font-serif text-3xl font-bold">
+                <div className="rounded-xl border border-black/10 bg-white p-3 shadow-sm sm:p-5">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] sm:text-sm">Instrumentos completados</p>
+                    <p className="mt-2 font-serif text-2xl font-bold sm:text-3xl">
                         {users.reduce((total, user) => total + user.responses.length, 0)}
                     </p>
                 </div>
-                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
-                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Usuarios con flujo completo</p>
-                    <p className="mt-2 font-serif text-3xl font-bold">{completedUsers}</p>
+                <div className="rounded-xl border border-black/10 bg-white p-3 shadow-sm sm:p-5">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] sm:text-sm">Usuarios con flujo completo</p>
+                    <p className="mt-2 font-serif text-2xl font-bold sm:text-3xl">{completedUsers}</p>
                 </div>
             </section>
 
-            <section className="mb-8 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
-                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Grupo experimental</p>
-                    <p className="mt-2 font-serif text-3xl font-bold">
+            <section className="mb-8 grid grid-cols-3 gap-2 sm:gap-4">
+                <div className="rounded-xl border border-black/10 bg-white p-3 shadow-sm sm:p-5">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] sm:text-sm">Grupo experimental</p>
+                    <p className="mt-2 font-serif text-2xl font-bold sm:text-3xl">
                         {users.filter((user) => normalizeStudyGroup(user.studyGroup) === 'experimental').length}
                     </p>
                 </div>
-                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
-                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Grupo control</p>
-                    <p className="mt-2 font-serif text-3xl font-bold">
+                <div className="rounded-xl border border-black/10 bg-white p-3 shadow-sm sm:p-5">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] sm:text-sm">Grupo control</p>
+                    <p className="mt-2 font-serif text-2xl font-bold sm:text-3xl">
                         {users.filter((user) => normalizeStudyGroup(user.studyGroup) === 'control').length}
                     </p>
                 </div>
-                <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
-                    <p className="text-sm font-semibold text-[var(--text-secondary)]">Sin asignar (sin acceso)</p>
-                    <p className="mt-2 font-serif text-3xl font-bold">{unassignedCount}</p>
+                <div className="rounded-xl border border-black/10 bg-white p-3 shadow-sm sm:p-5">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] sm:text-sm">Sin asignar (sin acceso)</p>
+                    <p className="mt-2 font-serif text-2xl font-bold sm:text-3xl">{unassignedCount}</p>
                 </div>
             </section>
 
@@ -185,7 +185,69 @@ export default async function AdminPage() {
                         <div className="border-b border-black/10 px-5 py-4">
                             <h2 className="font-serif text-xl font-bold">Resumen para análisis</h2>
                         </div>
-                        <div className="overflow-x-auto">
+                        {/* Phones and tablets: one card per participant instead of the wide table. */}
+                        <ul className="divide-y divide-black/5 xl:hidden">
+                            {users.map((user) => (
+                                <li key={user.id} className="grid gap-4 p-4 sm:p-5">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
+                                        <p className="truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                    </div>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="grid gap-1">
+                                            <span className="text-xs font-semibold text-[var(--text-secondary)]">Grupo</span>
+                                            <StudyGroupSelect
+                                                userId={user.id}
+                                                value={normalizeStudyGroup(user.studyGroup)}
+                                                participantLabel={user.participantCode ?? user.name}
+                                            />
+                                        </div>
+                                        <div className="grid gap-1">
+                                            <span className="text-xs font-semibold text-[var(--text-secondary)]">Límite agente (min)</span>
+                                            <div className="flex items-center gap-3">
+                                                <VoiceLimitInput
+                                                    userId={user.id}
+                                                    value={usage?.users[user.id]?.personalLimitMinutes ?? null}
+                                                    placeholder={globalLimit === null ? 'General' : String(globalLimit)}
+                                                    label={`Límite de ${user.participantCode ?? user.name}`}
+                                                />
+                                                <span className="text-xs text-[var(--text-secondary)]">
+                                                    Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <dl className="grid grid-cols-4 gap-2 rounded-lg bg-[#fff6e5] p-3 text-center text-sm sm:grid-cols-7">
+                                        {[
+                                            ['AE T1', user.scores.aeT1, false],
+                                            ['AE T2', user.scores.aeT2, false],
+                                            ['Δ AE', user.scores.aeDelta, true],
+                                            ['AC T1', user.scores.acT1, false],
+                                            ['AC T2', user.scores.acT2, false],
+                                            ['Δ AC', user.scores.acDelta, true],
+                                            ['SUS', user.scores.sus, false],
+                                        ].map(([label, value, strong]) => (
+                                            <div key={label as string}>
+                                                <dt className="text-[11px] font-bold text-[#663820]">{label}</dt>
+                                                <dd className={cn('mt-0.5', strong && 'font-semibold')}>{score(value as number | null)}</dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {user.stages.map((stage) => {
+                                            const config = statusConfig[stage.status];
+                                            const Icon = config.icon;
+                                            return (
+                                                <span key={stage.id} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
+                                                    <Icon className="size-3" /> {stage.shortTitle}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="hidden overflow-x-auto xl:block">
                             <table className="w-full min-w-[1200px] text-left text-sm">
                                 <thead className="bg-[#fff6e5]">
                                     <tr>
@@ -258,16 +320,16 @@ export default async function AdminPage() {
                         <h2 className="font-serif text-2xl font-bold">Detalle por usuario</h2>
                         {users.map((user) => (
                             <details key={user.id} className="group rounded-xl border border-black/10 bg-white shadow-sm">
-                                <summary className="flex cursor-pointer list-none flex-col justify-between gap-3 p-5 sm:flex-row sm:items-center">
-                                    <div>
+                                <summary className="flex cursor-pointer list-none flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
+                                    <div className="min-w-0">
                                         <h3 className="font-serif text-lg font-bold">{user.participantCode ?? 'Sin código'} · {user.name}</h3>
-                                        <p className="text-sm text-[var(--text-secondary)]">{user.email} · Alta: {formatDateTime(user.createdAt)}</p>
+                                        <p className="break-words text-sm text-[var(--text-secondary)]">{user.email} · Alta: {formatDateTime(user.createdAt)}</p>
                                     </div>
                                     <span className="text-sm font-semibold text-[#663820] group-open:hidden">Ver respuestas y fechas</span>
                                     <span className="hidden text-sm font-semibold text-[#663820] group-open:inline">Ocultar detalle</span>
                                 </summary>
-                                <div className="border-t border-black/10 p-5">
-                                    <div className="mb-6 grid gap-3 md:grid-cols-5">
+                                <div className="border-t border-black/10 p-4 sm:p-5">
+                                    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                                         {user.stages.map((stage) => {
                                             const config = statusConfig[stage.status];
                                             const Icon = config.icon;
