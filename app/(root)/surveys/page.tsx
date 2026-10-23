@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { getSurveyProgress, type SurveyStageStatus } from '@/lib/actions/survey.actions';
 import { guardParticipantPage } from '@/lib/study/access';
 import { formatDateTime } from '@/lib/metrics/format';
+import { formatEstimatedMinutes } from '@/lib/surveys/catalog';
 import { cn } from '@/lib/utils';
 
 export const metadata = { title: 'Encuestas — Investfied' };
@@ -87,7 +88,7 @@ export default async function SurveysPage() {
                                             <Icon className="size-3.5" /> {status.label}
                                         </span>
                                         <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
-                                            <Timer className="size-3.5" /> ~ {stage.estimatedMinutes} minutos
+                                            <Timer className="size-3.5" /> ~ {formatEstimatedMinutes(stage.estimatedMinutes)}
                                         </span>
                                         {stage.submittedAt && (
                                             <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">

@@ -1,6 +1,7 @@
 import { Check, Circle, Clock3, LockKeyhole, Minus, ShieldCheck, UsersRound } from 'lucide-react';
 
 import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
+import AdminFilters from '@/components/admin/AdminFilters';
 import ExportThesisXlsxButton from '@/components/admin/ExportThesisXlsxButton';
 import MaterialsManager from '@/components/admin/MaterialsManager';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
@@ -8,6 +9,7 @@ import VoiceLimitInput from '@/components/admin/VoiceLimitInput';
 import ThesisUploadToggle from '@/components/admin/ThesisUploadToggle';
 import { getThesisUploadEnabled, getVoiceUsageOverview } from '@/lib/actions/study.actions';
 import { checkAdminAccess } from '@/lib/admin/access';
+import { filterAdminUsers, parseAdminFilters } from '@/lib/admin/filters';
 import { listStudyMaterialsForAdmin } from '@/lib/actions/material.actions';
 import { getAdminSurveyOverview, type SurveyStageStatus } from '@/lib/actions/survey.actions';
 import { formatDateTime } from '@/lib/metrics/format';
@@ -33,7 +35,11 @@ function formatMinutes(seconds: number): string {
     return `${Math.round((seconds / 60) * 10) / 10} min`;
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+    searchParams,
+}: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
     const access = await checkAdminAccess();
     if (!access.allowed) {
         return (
@@ -63,6 +69,8 @@ export default async function AdminPage() {
     }
 
     const users = result.data;
+    const filters = parseAdminFilters(await searchParams);
+    const filteredUsers = filterAdminUsers(users, filters);
     const materials = materialsResult.success ? materialsResult.data ?? [] : [];
     const usage = usageResult.success ? usageResult.data : undefined;
     const globalLimit = usage?.globalLimitMinutes ?? null;
@@ -185,200 +193,213 @@ export default async function AdminPage() {
                 </section>
             ) : (
                 <>
-                    <section className="mb-8 overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
-                        <div className="border-b border-black/10 px-5 py-4">
-                            <h2 className="font-serif text-xl font-bold">Resumen para análisis</h2>
-                        </div>
-                        {/* Phones and tablets: one card per participant instead of the wide table. */}
-                        <ul className="divide-y divide-black/5 xl:hidden">
-                            {users.map((user) => (
-                                <li key={user.id} className="grid gap-4 p-4 sm:p-5">
-                                    <div className="min-w-0">
-                                        <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
-                                        <p className="truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
-                                    </div>
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                        <div className="grid gap-1">
-                                            <span className="text-xs font-semibold text-[var(--text-secondary)]">Grupo</span>
-                                            <StudyGroupSelect
-                                                userId={user.id}
-                                                value={normalizeStudyGroup(user.studyGroup)}
-                                                participantLabel={user.participantCode ?? user.name}
-                                            />
-                                        </div>
-                                        <div className="grid gap-1">
-                                            <span className="text-xs font-semibold text-[var(--text-secondary)]">Límite agente (min)</span>
-                                            <div className="flex items-center gap-3">
-                                                <VoiceLimitInput
-                                                    userId={user.id}
-                                                    value={usage?.users[user.id]?.personalLimitMinutes ?? null}
-                                                    placeholder={globalLimit === null ? 'General' : String(globalLimit)}
-                                                    label={`Límite de ${user.participantCode ?? user.name}`}
-                                                />
-                                                <span className="text-xs text-[var(--text-secondary)]">
-                                                    Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <dl className="grid grid-cols-4 gap-2 rounded-lg bg-[#fff6e5] p-3 text-center text-sm sm:grid-cols-7">
-                                        {[
-                                            ['AE T1', user.scores.aeT1, false],
-                                            ['AE T2', user.scores.aeT2, false],
-                                            ['Δ AE', user.scores.aeDelta, true],
-                                            ['AC T1', user.scores.acT1, false],
-                                            ['AC T2', user.scores.acT2, false],
-                                            ['Δ AC', user.scores.acDelta, true],
-                                            ['SUS', user.scores.sus, false],
-                                        ].map(([label, value, strong]) => (
-                                            <div key={label as string}>
-                                                <dt className="text-[11px] font-bold text-[#663820]">{label}</dt>
-                                                <dd className={cn('mt-0.5', strong && 'font-semibold')}>{score(value as number | null)}</dd>
-                                            </div>
-                                        ))}
-                                    </dl>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {user.stages.map((stage) => {
-                                            const config = statusConfig[stage.status];
-                                            const Icon = config.icon;
-                                            return (
-                                                <span key={stage.id} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
-                                                    <Icon className="size-3" /> {stage.shortTitle}
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                        <div className="hidden overflow-x-auto xl:block">
-                            <table className="w-full min-w-[1200px] text-left text-sm">
-                                <thead className="bg-[#fff6e5]">
-                                    <tr>
-                                        <th className="px-4 py-3">Participante</th>
-                                        <th className="w-40 px-4 py-3">Grupo</th>
-                                        <th className="px-4 py-3">Límite agente (min)</th>
-                                        <th className="px-4 py-3 text-center">AE T1</th>
-                                        <th className="px-4 py-3 text-center">AE T2</th>
-                                        <th className="px-4 py-3 text-center">Δ AE</th>
-                                        <th className="px-4 py-3 text-center">AC T1</th>
-                                        <th className="px-4 py-3 text-center">AC T2</th>
-                                        <th className="px-4 py-3 text-center">Δ AC</th>
-                                        <th className="px-4 py-3 text-center">SUS</th>
-                                        <th className="px-4 py-3">Etapas</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map((user) => (
-                                        <tr key={user.id} className="border-t border-black/5 align-top">
-                                            <td className="px-4 py-3">
+                    <section id="participantes" className="scroll-mt-24">
+                        <h2 className="mb-3 font-serif text-2xl font-bold">Participantes</h2>
+                        <AdminFilters filters={filters} shown={filteredUsers.length} total={users.length} />
+                    </section>
+
+                    {filteredUsers.length === 0 ? (
+                        <section className="mb-8 rounded-xl border border-dashed border-black/20 bg-white p-8 text-center text-sm text-[var(--text-secondary)]">
+                            Ningún participante coincide con los filtros.
+                        </section>
+                    ) : (
+                        <>
+                            <section className="mb-8 overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
+                                <div className="border-b border-black/10 px-5 py-4">
+                                    <h2 className="font-serif text-xl font-bold">Resumen para análisis</h2>
+                                </div>
+                                {/* Phones and tablets: one card per participant instead of the wide table. */}
+                                <ul className="divide-y divide-black/5 xl:hidden">
+                                    {filteredUsers.map((user) => (
+                                        <li key={user.id} className="grid gap-4 p-4 sm:p-5">
+                                            <div className="min-w-0">
                                                 <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
-                                                <p className="max-w-56 truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <StudyGroupSelect
-                                                    userId={user.id}
-                                                    value={normalizeStudyGroup(user.studyGroup)}
-                                                    participantLabel={user.participantCode ?? user.name}
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <VoiceLimitInput
-                                                    userId={user.id}
-                                                    value={usage?.users[user.id]?.personalLimitMinutes ?? null}
-                                                    placeholder={globalLimit === null ? 'General' : String(globalLimit)}
-                                                    label={`Límite de ${user.participantCode ?? user.name}`}
-                                                />
-                                                <p className="mt-1 whitespace-nowrap text-xs text-[var(--text-secondary)]">
-                                                    Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
-                                                </p>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">{score(user.scores.aeT1)}</td>
-                                            <td className="px-4 py-3 text-center">{score(user.scores.aeT2)}</td>
-                                            <td className="px-4 py-3 text-center font-semibold">{score(user.scores.aeDelta)}</td>
-                                            <td className="px-4 py-3 text-center">{score(user.scores.acT1)}</td>
-                                            <td className="px-4 py-3 text-center">{score(user.scores.acT2)}</td>
-                                            <td className="px-4 py-3 text-center font-semibold">{score(user.scores.acDelta)}</td>
-                                            <td className="px-4 py-3 text-center">{score(user.scores.sus)}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex gap-1.5">
-                                                    {user.stages.map((stage) => {
-                                                        const config = statusConfig[stage.status];
-                                                        const Icon = config.icon;
-                                                        return (
-                                                            <span key={stage.id} title={`${stage.shortTitle}: ${config.label}`} className={cn('rounded-full p-1.5', config.className)}>
-                                                                <Icon className="size-3.5" />
+                                                <p className="truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <div className="grid gap-1">
+                                                    <span className="text-xs font-semibold text-[var(--text-secondary)]">Grupo</span>
+                                                    <StudyGroupSelect
+                                                        userId={user.id}
+                                                        value={normalizeStudyGroup(user.studyGroup)}
+                                                        participantLabel={user.participantCode ?? user.name}
+                                                    />
+                                                </div>
+                                                <div className="grid gap-1">
+                                                    <span className="text-xs font-semibold text-[var(--text-secondary)]">Límite agente (min)</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <VoiceLimitInput
+                                                            userId={user.id}
+                                                            value={usage?.users[user.id]?.personalLimitMinutes ?? null}
+                                                            placeholder={globalLimit === null ? 'General' : String(globalLimit)}
+                                                            label={`Límite de ${user.participantCode ?? user.name}`}
+                                                        />
+                                                        <span className="text-xs text-[var(--text-secondary)]">
+                                                            Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <dl className="grid grid-cols-4 gap-2 rounded-lg bg-[#fff6e5] p-3 text-center text-sm sm:grid-cols-7">
+                                                {[
+                                                    ['AE T1', user.scores.aeT1, false],
+                                                    ['AE T2', user.scores.aeT2, false],
+                                                    ['Δ AE', user.scores.aeDelta, true],
+                                                    ['AC T1', user.scores.acT1, false],
+                                                    ['AC T2', user.scores.acT2, false],
+                                                    ['Δ AC', user.scores.acDelta, true],
+                                                    ['SUS', user.scores.sus, false],
+                                                ].map(([label, value, strong]) => (
+                                                    <div key={label as string}>
+                                                        <dt className="text-[11px] font-bold text-[#663820]">{label}</dt>
+                                                        <dd className={cn('mt-0.5', strong && 'font-semibold')}>{score(value as number | null)}</dd>
+                                                    </div>
+                                                ))}
+                                            </dl>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {user.stages.map((stage) => {
+                                                    const config = statusConfig[stage.status];
+                                                    const Icon = config.icon;
+                                                    return (
+                                                        <span key={stage.id} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
+                                                            <Icon className="size-3" /> {stage.shortTitle}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <div className="hidden overflow-x-auto xl:block">
+                                    <table className="w-full min-w-[1200px] text-left text-sm">
+                                        <thead className="bg-[#fff6e5]">
+                                            <tr>
+                                                <th className="px-4 py-3">Participante</th>
+                                                <th className="w-40 px-4 py-3">Grupo</th>
+                                                <th className="px-4 py-3">Límite agente (min)</th>
+                                                <th className="px-4 py-3 text-center">AE T1</th>
+                                                <th className="px-4 py-3 text-center">AE T2</th>
+                                                <th className="px-4 py-3 text-center">Δ AE</th>
+                                                <th className="px-4 py-3 text-center">AC T1</th>
+                                                <th className="px-4 py-3 text-center">AC T2</th>
+                                                <th className="px-4 py-3 text-center">Δ AC</th>
+                                                <th className="px-4 py-3 text-center">SUS</th>
+                                                <th className="px-4 py-3">Etapas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredUsers.map((user) => (
+                                                <tr key={user.id} className="border-t border-black/5 align-top">
+                                                    <td className="px-4 py-3">
+                                                        <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
+                                                        <p className="max-w-56 truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <StudyGroupSelect
+                                                            userId={user.id}
+                                                            value={normalizeStudyGroup(user.studyGroup)}
+                                                            participantLabel={user.participantCode ?? user.name}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <VoiceLimitInput
+                                                            userId={user.id}
+                                                            value={usage?.users[user.id]?.personalLimitMinutes ?? null}
+                                                            placeholder={globalLimit === null ? 'General' : String(globalLimit)}
+                                                            label={`Límite de ${user.participantCode ?? user.name}`}
+                                                        />
+                                                        <p className="mt-1 whitespace-nowrap text-xs text-[var(--text-secondary)]">
+                                                            Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">{score(user.scores.aeT1)}</td>
+                                                    <td className="px-4 py-3 text-center">{score(user.scores.aeT2)}</td>
+                                                    <td className="px-4 py-3 text-center font-semibold">{score(user.scores.aeDelta)}</td>
+                                                    <td className="px-4 py-3 text-center">{score(user.scores.acT1)}</td>
+                                                    <td className="px-4 py-3 text-center">{score(user.scores.acT2)}</td>
+                                                    <td className="px-4 py-3 text-center font-semibold">{score(user.scores.acDelta)}</td>
+                                                    <td className="px-4 py-3 text-center">{score(user.scores.sus)}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex gap-1.5">
+                                                            {user.stages.map((stage) => {
+                                                                const config = statusConfig[stage.status];
+                                                                const Icon = config.icon;
+                                                                return (
+                                                                    <span key={stage.id} title={`${stage.shortTitle}: ${config.label}`} className={cn('rounded-full p-1.5', config.className)}>
+                                                                        <Icon className="size-3.5" />
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+
+                            <section className="grid gap-4">
+                                <h2 className="font-serif text-2xl font-bold">Detalle por usuario</h2>
+                                {filteredUsers.map((user) => (
+                                    <details key={user.id} className="group rounded-xl border border-black/10 bg-white shadow-sm">
+                                        <summary className="flex cursor-pointer list-none flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
+                                            <div className="min-w-0">
+                                                <h3 className="font-serif text-lg font-bold">{user.participantCode ?? 'Sin código'} · {user.name}</h3>
+                                                <p className="break-words text-sm text-[var(--text-secondary)]">{user.email} · Alta: {formatDateTime(user.createdAt)}</p>
+                                            </div>
+                                            <span className="text-sm font-semibold text-[#663820] group-open:hidden">Ver respuestas y fechas</span>
+                                            <span className="hidden text-sm font-semibold text-[#663820] group-open:inline">Ocultar detalle</span>
+                                        </summary>
+                                        <div className="border-t border-black/10 p-4 sm:p-5">
+                                            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                                                {user.stages.map((stage) => {
+                                                    const config = statusConfig[stage.status];
+                                                    const Icon = config.icon;
+                                                    return (
+                                                        <div key={stage.id} className="rounded-lg border border-black/10 p-3">
+                                                            <p className="text-xs font-bold">{stage.shortTitle}</p>
+                                                            <span className={cn('mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
+                                                                <Icon className="size-3" /> {config.label}
                                                             </span>
+                                                            {stage.submittedAt && <p className="mt-2 text-xs text-[var(--text-secondary)]"><Clock3 className="mr-1 inline size-3" />{formatDateTime(stage.submittedAt)}</p>}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {user.responses.length === 0 ? (
+                                                <p className="text-sm text-[var(--text-secondary)]">Este usuario todavía no ha enviado ninguna encuesta.</p>
+                                            ) : (
+                                                <div className="grid gap-5">
+                                                    {user.responses.map((response) => {
+                                                        const stage = user.stages.find((item) => item.id === response.stageId)!;
+                                                        const questions = SURVEY_INSTRUMENTS[stage.type].questions;
+                                                        return (
+                                                            <details key={response.stageId} className="rounded-lg border border-black/10">
+                                                                <summary className="cursor-pointer list-none p-4 font-semibold">
+                                                                    {response.title} · {response.scoreLabel} = {response.computedScore}
+                                                                    <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">{formatDateTime(response.submittedAt)}</span>
+                                                                </summary>
+                                                                <ol className="border-t border-black/10 p-4 text-sm">
+                                                                    {questions.map((question, index) => (
+                                                                        <li key={question} className="grid gap-1 border-b border-black/5 py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:gap-5">
+                                                                            <span><strong>{index + 1}.</strong> {question}</span>
+                                                                            <span className="font-bold text-[#663820]">Respuesta cruda: {response.answers[index]}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ol>
+                                                            </details>
                                                         );
                                                     })}
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <section className="grid gap-4">
-                        <h2 className="font-serif text-2xl font-bold">Detalle por usuario</h2>
-                        {users.map((user) => (
-                            <details key={user.id} className="group rounded-xl border border-black/10 bg-white shadow-sm">
-                                <summary className="flex cursor-pointer list-none flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
-                                    <div className="min-w-0">
-                                        <h3 className="font-serif text-lg font-bold">{user.participantCode ?? 'Sin código'} · {user.name}</h3>
-                                        <p className="break-words text-sm text-[var(--text-secondary)]">{user.email} · Alta: {formatDateTime(user.createdAt)}</p>
-                                    </div>
-                                    <span className="text-sm font-semibold text-[#663820] group-open:hidden">Ver respuestas y fechas</span>
-                                    <span className="hidden text-sm font-semibold text-[#663820] group-open:inline">Ocultar detalle</span>
-                                </summary>
-                                <div className="border-t border-black/10 p-4 sm:p-5">
-                                    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-                                        {user.stages.map((stage) => {
-                                            const config = statusConfig[stage.status];
-                                            const Icon = config.icon;
-                                            return (
-                                                <div key={stage.id} className="rounded-lg border border-black/10 p-3">
-                                                    <p className="text-xs font-bold">{stage.shortTitle}</p>
-                                                    <span className={cn('mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
-                                                        <Icon className="size-3" /> {config.label}
-                                                    </span>
-                                                    {stage.submittedAt && <p className="mt-2 text-xs text-[var(--text-secondary)]"><Clock3 className="mr-1 inline size-3" />{formatDateTime(stage.submittedAt)}</p>}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {user.responses.length === 0 ? (
-                                        <p className="text-sm text-[var(--text-secondary)]">Este usuario todavía no ha enviado ninguna encuesta.</p>
-                                    ) : (
-                                        <div className="grid gap-5">
-                                            {user.responses.map((response) => {
-                                                const stage = user.stages.find((item) => item.id === response.stageId)!;
-                                                const questions = SURVEY_INSTRUMENTS[stage.type].questions;
-                                                return (
-                                                    <details key={response.stageId} className="rounded-lg border border-black/10">
-                                                        <summary className="cursor-pointer list-none p-4 font-semibold">
-                                                            {response.title} · {response.scoreLabel} = {response.computedScore}
-                                                            <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">{formatDateTime(response.submittedAt)}</span>
-                                                        </summary>
-                                                        <ol className="border-t border-black/10 p-4 text-sm">
-                                                            {questions.map((question, index) => (
-                                                                <li key={question} className="grid gap-1 border-b border-black/5 py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:gap-5">
-                                                                    <span><strong>{index + 1}.</strong> {question}</span>
-                                                                    <span className="font-bold text-[#663820]">Respuesta cruda: {response.answers[index]}</span>
-                                                                </li>
-                                                            ))}
-                                                        </ol>
-                                                    </details>
-                                                );
-                                            })}
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            </details>
-                        ))}
-                    </section>
+                                    </details>
+                                ))}
+                            </section>
+                        </>
+                    )}
                 </>
             )}
         </main>
