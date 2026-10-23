@@ -1,6 +1,7 @@
 import { Check, Circle, Clock3, LockKeyhole, Minus, ShieldCheck, UsersRound } from 'lucide-react';
 
 import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
+import ExportThesisXlsxButton from '@/components/admin/ExportThesisXlsxButton';
 import MaterialsManager from '@/components/admin/MaterialsManager';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
 import VoiceLimitInput from '@/components/admin/VoiceLimitInput';
@@ -85,7 +86,10 @@ export default async function AdminPage() {
                         y materiales. Una cuenta <strong>sin asignar</strong> no puede entrar a ninguna de las dos.
                     </p>
                 </div>
-                <ExportSurveyCsvButton />
+                <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
+                    <ExportThesisXlsxButton />
+                    <ExportSurveyCsvButton />
+                </div>
             </header>
 
             <section className="mb-8 grid grid-cols-3 gap-2 sm:gap-4">

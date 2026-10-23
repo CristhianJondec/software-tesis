@@ -54,6 +54,7 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 | Vista de progreso longitudinal | `app/(root)/progreso/page.tsx`, `components/ProgressCharts.tsx`, `components/ProgressEvidence.tsx` |
 | Roles del estudio (experimental / control) y control de acceso | `lib/study/` (`groups.ts`, `access.ts`) |
 | Vista de materiales del grupo control | `app/(root)/materiales/page.tsx`, `lib/materials/guide.ts` |
+| Exportación .xlsx «Exportar datos de tesis» (admin): hojas O₁/O₂, SUS, uso, sesiones, métricas y diccionario | `lib/thesis-export/sheets.ts`, `lib/actions/thesis-export.actions.ts`, `components/admin/ExportThesisXlsxButton.tsx` |
 | Asignación de grupo y PDFs compartidos (admin) | `lib/actions/study.actions.ts`, `lib/actions/material.actions.ts`, `components/admin/` |
 
 ## Cómo funciona hoy el flujo de voz

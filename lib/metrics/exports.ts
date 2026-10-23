@@ -18,7 +18,13 @@ export interface CsvFile {
     content: string;
 }
 
-const SESSION_HEADERS = [
+/** Headers plus rows, before serialisation. Shared by the CSV files and the thesis workbook. */
+export interface MetricsTable {
+    headers: readonly string[];
+    rows: CsvValue[][];
+}
+
+export const SESSION_HEADERS = [
     'codigo_participante',
     'grupo_estudio',
     'usuario_id',
@@ -62,7 +68,7 @@ const SESSION_HEADERS = [
     'fb_claridad_no_concluyentes',
 ];
 
-export function buildSessionsCsv(report: MetricsReport): CsvFile {
+export function buildSessionsTable(report: MetricsReport): MetricsTable {
     const rows: CsvValue[][] = report.sessions.map((session) => [
         session.participantCode,
         session.studyGroup,
@@ -107,10 +113,14 @@ export function buildSessionsCsv(report: MetricsReport): CsvFile {
         session.feedbackClarity.inconclusive,
     ]);
 
-    return { filename: 'metricas-sesiones.csv', content: toCsv(SESSION_HEADERS, rows) };
+    return { headers: SESSION_HEADERS, rows };
 }
 
-const PARTICIPANT_HEADERS = [
+export function buildSessionsCsv(report: MetricsReport): CsvFile {
+    return { filename: 'metricas-sesiones.csv', content: toCsv(SESSION_HEADERS, buildSessionsTable(report).rows) };
+}
+
+export const PARTICIPANT_HEADERS = [
     'codigo_participante',
     'grupo_estudio',
     'usuario_id',
@@ -133,7 +143,7 @@ const PARTICIPANT_HEADERS = [
     'pr_porcentaje',
 ];
 
-export function buildParticipantsCsv(report: MetricsReport): CsvFile {
+export function buildParticipantsTable(report: MetricsReport): MetricsTable {
     const rows: CsvValue[][] = report.participants.map((participant) => [
         participant.participantCode,
         participant.studyGroup,
@@ -157,10 +167,17 @@ export function buildParticipantsCsv(report: MetricsReport): CsvFile {
         participant.precision.percentage,
     ]);
 
-    return { filename: 'metricas-participantes.csv', content: toCsv(PARTICIPANT_HEADERS, rows) };
+    return { headers: PARTICIPANT_HEADERS, rows };
 }
 
-const TURN_HEADERS = [
+export function buildParticipantsCsv(report: MetricsReport): CsvFile {
+    return {
+        filename: 'metricas-participantes.csv',
+        content: toCsv(PARTICIPANT_HEADERS, buildParticipantsTable(report).rows),
+    };
+}
+
+export const TURN_HEADERS = [
     'codigo_participante',
     'grupo_estudio',
     'usuario_id',
@@ -190,7 +207,7 @@ const TURN_HEADERS = [
  * human verdict and its RAGAs scores when it has them. This is the file a
  * statistical test actually runs on.
  */
-export function buildTurnsCsv(input: MetricsInput, report: MetricsReport): CsvFile {
+export function buildTurnsTable(input: MetricsInput, report: MetricsReport): MetricsTable {
     const sessionNumbers = new Map(report.sessions.map((s) => [s.sessionId, s.sessionNumber]));
     const evaluationByTurn = new Map(input.evaluations.map((e) => [e.turnId, e]));
     const ragasByTurn = new Map(input.ragasRows.map((r) => [r.turnId, r]));
@@ -233,7 +250,11 @@ export function buildTurnsCsv(input: MetricsInput, report: MetricsReport): CsvFi
         ];
     });
 
-    return { filename: 'metricas-turnos.csv', content: toCsv(TURN_HEADERS, rows) };
+    return { headers: TURN_HEADERS, rows };
+}
+
+export function buildTurnsCsv(input: MetricsInput, report: MetricsReport): CsvFile {
+    return { filename: 'metricas-turnos.csv', content: toCsv(TURN_HEADERS, buildTurnsTable(input, report).rows) };
 }
 
 export function buildAllCsvFiles(input: MetricsInput, report: MetricsReport): CsvFile[] {
