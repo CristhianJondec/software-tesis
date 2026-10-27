@@ -3,8 +3,9 @@ import { LOG_EVENTS, LOG_LEVEL_LABELS, LOG_LEVELS, LOG_SOURCE_LABELS, LOG_SOURCE
 
 /**
  * Filters of /admin/logs. Like the participant list, they live in the URL
- * (?q=&grupo=&nivel=&fuente=&evento=&desde=&hasta=&pagina=) so a filtered view
- * survives a reload.
+ * (?q=&grupo=&nivel=&fuente=&evento=&desde=&hasta=&pagina=&sesiones=) so a
+ * filtered view survives a reload. `pagina` pages the events and `sesiones` the
+ * session list, independently.
  */
 
 export interface SystemLogFilters {
@@ -17,10 +18,11 @@ export interface SystemLogFilters {
     desde: string;
     hasta: string;
     pagina: number;
+    paginaSesiones: number;
 }
 
-export const LOGS_PAGE_SIZE = 100;
-export const SESSIONS_LIST_LIMIT = 50;
+export const LOGS_PAGE_SIZE = 20;
+export const SESSIONS_PAGE_SIZE = 20;
 
 export const LOG_GROUP_OPTIONS = GROUP_FILTER_OPTIONS;
 
@@ -55,7 +57,10 @@ export function parseSystemLogFilters(params: Record<string, string | string[] |
         const value = params[key];
         return Array.isArray(value) ? value[0] : value;
     };
-    const page = Number.parseInt(first('pagina') ?? '', 10);
+    const page = (key: string) => {
+        const value = Number.parseInt(first(key) ?? '', 10);
+        return Number.isFinite(value) && value > 0 ? value : 1;
+    };
     return {
         q: (first('q') ?? '').trim(),
         grupo: pick(first('grupo'), LOG_GROUP_OPTIONS, 'todos'),
@@ -64,7 +69,8 @@ export function parseSystemLogFilters(params: Record<string, string | string[] |
         evento: pick(first('evento'), LOG_EVENT_OPTIONS, 'todos'),
         desde: parseDate(first('desde')),
         hasta: parseDate(first('hasta')),
-        pagina: Number.isFinite(page) && page > 0 ? page : 1,
+        pagina: page('pagina'),
+        paginaSesiones: page('sesiones'),
     };
 }
 
@@ -78,11 +84,12 @@ export function serializeSystemLogFilters(filters: SystemLogFilters): string {
     if (filters.desde) params.set('desde', filters.desde);
     if (filters.hasta) params.set('hasta', filters.hasta);
     if (filters.pagina > 1) params.set('pagina', String(filters.pagina));
+    if (filters.paginaSesiones > 1) params.set('sesiones', String(filters.paginaSesiones));
     return params.toString();
 }
 
 export function hasActiveLogFilters(filters: SystemLogFilters): boolean {
-    return serializeSystemLogFilters({ ...filters, pagina: 1 }) !== '';
+    return serializeSystemLogFilters({ ...filters, pagina: 1, paginaSesiones: 1 }) !== '';
 }
 
 // Lima has no daylight saving time, so a fixed offset is exact.

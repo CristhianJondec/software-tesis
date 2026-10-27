@@ -3,7 +3,8 @@ import { normalizeStudyGroup } from '@/lib/study/groups';
 
 /**
  * Filters of the participant list in /admin. They live in the URL
- * (?q=&grupo=&avance=) so a filtered view survives a reload and can be shared.
+ * (?q=&grupo=&avance=&pagina=) so a filtered view survives a reload and can be
+ * shared. Changing a filter drops `pagina`, so the list goes back to page 1.
  */
 
 export type GroupFilter = 'todos' | 'experimental' | 'control' | 'sin_asignar';
@@ -14,6 +15,8 @@ export interface AdminFilters {
     grupo: GroupFilter;
     avance: ProgressFilter;
 }
+
+export const USERS_PAGE_SIZE = 20;
 
 export const GROUP_FILTER_OPTIONS: readonly { value: GroupFilter; label: string }[] = [
     { value: 'todos', label: 'Todos los grupos' },
@@ -44,6 +47,22 @@ export function parseAdminFilters(params: Record<string, string | string[] | und
         grupo: pick(first('grupo'), GROUP_FILTER_OPTIONS, 'todos'),
         avance: pick(first('avance'), PROGRESS_FILTER_OPTIONS, 'todos'),
     };
+}
+
+/** Page of the participant list requested in the URL (1-based). */
+export function parseAdminPage(params: Record<string, string | string[] | undefined>): number {
+    const raw = Array.isArray(params.pagina) ? params.pagina[0] : params.pagina;
+    const page = Number.parseInt(raw ?? '', 10);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+export function serializeAdminFilters(filters: AdminFilters, page = 1): string {
+    const params = new URLSearchParams();
+    if (filters.q) params.set('q', filters.q);
+    if (filters.grupo !== 'todos') params.set('grupo', filters.grupo);
+    if (filters.avance !== 'todos') params.set('avance', filters.avance);
+    if (page > 1) params.set('pagina', String(page));
+    return params.toString();
 }
 
 export function hasActiveFilters(filters: AdminFilters): boolean {

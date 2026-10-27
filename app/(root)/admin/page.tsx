@@ -7,12 +7,20 @@ import { ImpersonateButton } from '@/components/admin/ImpersonateButton';
 import AdminFilters from '@/components/admin/AdminFilters';
 import ExportThesisXlsxButton from '@/components/admin/ExportThesisXlsxButton';
 import MaterialsManager from '@/components/admin/MaterialsManager';
+import PaginationNav from '@/components/admin/PaginationNav';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
 import VoiceLimitInput from '@/components/admin/VoiceLimitInput';
 import ThesisUploadToggle from '@/components/admin/ThesisUploadToggle';
+import UserDetailSheet from '@/components/admin/UserDetailSheet';
 import { getThesisUploadEnabled, getThesisUploadOverview, getVoiceUsageOverview } from '@/lib/actions/study.actions';
 import { checkAdminAccess } from '@/lib/admin/access';
-import { filterAdminUsers, parseAdminFilters } from '@/lib/admin/filters';
+import {
+    filterAdminUsers,
+    parseAdminFilters,
+    parseAdminPage,
+    serializeAdminFilters,
+    USERS_PAGE_SIZE,
+} from '@/lib/admin/filters';
 import { listStudyMaterialsForAdmin } from '@/lib/actions/material.actions';
 import { getAdminSurveyOverview, type SurveyStageStatus } from '@/lib/actions/survey.actions';
 import { formatDateTime } from '@/lib/metrics/format';
@@ -37,6 +45,75 @@ function score(value: number | null): string {
 
 function formatMinutes(seconds: number): string {
     return `${Math.round((seconds / 60) * 10) / 10} min`;
+}
+
+type AdminUser = NonNullable<Awaited<ReturnType<typeof getAdminSurveyOverview>>['data']>[number];
+
+/** Stages and raw answers of one participant, shown in its side panel. */
+function UserDetail({ user }: { user: AdminUser }) {
+    return (
+        <>
+            <Link
+                href={`/admin/logs?q=${encodeURIComponent(user.participantCode ?? user.email)}`}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#663820] hover:underline"
+            >
+                <ScrollText className="size-4" /> Ver sesiones y logs de este participante
+            </Link>
+            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {user.stages.map((stage) => {
+                    const config = statusConfig[stage.status];
+                    const Icon = config.icon;
+                    return (
+                        <div key={stage.id} className="rounded-lg border border-black/10 p-3">
+                            <p className="text-xs font-bold">{stage.shortTitle}</p>
+                            <span className={cn('mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
+                                <Icon className="size-3" /> {config.label}
+                            </span>
+                            {stage.submittedAt && <p className="mt-2 text-xs text-[var(--text-secondary)]"><Clock3 className="mr-1 inline size-3" />{formatDateTime(stage.submittedAt)}</p>}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {user.responses.length === 0 ? (
+                <p className="text-sm text-[var(--text-secondary)]">Este usuario todavía no ha enviado ninguna encuesta.</p>
+            ) : (
+                <div className="grid gap-4">
+                    {user.responses.map((response) => {
+                        const stage = user.stages.find((item) => item.id === response.stageId)!;
+                        const questions = SURVEY_INSTRUMENTS[stage.type].questions;
+                        return (
+                            <details key={response.stageId} className="rounded-lg border border-black/10">
+                                <summary className="cursor-pointer list-none p-4 font-semibold">
+                                    {response.title} · {response.scoreLabel} = {response.computedScore}
+                                    <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">{formatDateTime(response.submittedAt)}</span>
+                                </summary>
+                                <ol className="border-t border-black/10 p-4 text-sm">
+                                    {questions.map((question, index) => (
+                                        <li key={question} className="grid gap-1 border-b border-black/5 py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:gap-5">
+                                            <span><strong>{index + 1}.</strong> {question}</span>
+                                            <span className="font-bold text-[#663820]">Respuesta cruda: {response.answers[index]}</span>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </details>
+                        );
+                    })}
+                </div>
+            )}
+        </>
+    );
+}
+
+function UserDetailButton({ user }: { user: AdminUser }) {
+    return (
+        <UserDetailSheet
+            title={`${user.participantCode ?? 'Sin código'} · ${user.name}`}
+            description={`${user.email} · Alta: ${formatDateTime(user.createdAt)}`}
+        >
+            <UserDetail user={user} />
+        </UserDetailSheet>
+    );
 }
 
 export default async function AdminPage({
@@ -74,8 +151,16 @@ export default async function AdminPage({
     }
 
     const users = result.data;
-    const filters = parseAdminFilters(await searchParams);
+    const params = await searchParams;
+    const filters = parseAdminFilters(params);
     const filteredUsers = filterAdminUsers(users, filters);
+    const pageCount = Math.max(1, Math.ceil(filteredUsers.length / USERS_PAGE_SIZE));
+    const page = Math.min(parseAdminPage(params), pageCount);
+    const pagedUsers = filteredUsers.slice((page - 1) * USERS_PAGE_SIZE, page * USERS_PAGE_SIZE);
+    const usersPageHref = (target: number) => {
+        const search = serializeAdminFilters(filters, target);
+        return `${search ? `/admin?${search}` : '/admin'}#participantes`;
+    };
     const materials = materialsResult.success ? materialsResult.data ?? [] : [];
     const usage = usageResult.success ? usageResult.data : undefined;
     const globalLimit = usage?.globalLimitMinutes ?? null;
@@ -251,7 +336,7 @@ export default async function AdminPage({
                                 </div>
                                 {/* Phones and tablets: one card per participant instead of the wide table. */}
                                 <ul className="divide-y divide-black/5 xl:hidden">
-                                    {filteredUsers.map((user) => (
+                                    {pagedUsers.map((user) => (
                                         <li key={user.id} className="grid gap-4 p-4 sm:p-5">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
@@ -262,9 +347,12 @@ export default async function AdminPage({
                                                         <ParticipantCodeInput userId={user.id} value={user.participantCode} participantLabel={user.name} />
                                                     </label>
                                                 </div>
-                                                {user.id !== access.userId && (
-                                                    <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
-                                                )}
+                                                <div className="flex shrink-0 flex-col items-end gap-2">
+                                                    <UserDetailButton user={user} />
+                                                    {user.id !== access.userId && (
+                                                        <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="grid gap-3 sm:grid-cols-2">
                                                 <div className="grid gap-1">
@@ -354,7 +442,7 @@ export default async function AdminPage({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {filteredUsers.map((user) => (
+                                            {pagedUsers.map((user) => (
                                                 <tr key={user.id} className="border-t border-black/5 align-top">
                                                     <td className="px-4 py-3">
                                                         <p className="font-semibold">{user.name}</p>
@@ -363,11 +451,12 @@ export default async function AdminPage({
                                                             Código
                                                             <ParticipantCodeInput userId={user.id} value={user.participantCode} participantLabel={user.name} />
                                                         </label>
-                                                        {user.id !== access.userId && (
-                                                            <div className="mt-2">
+                                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                            <UserDetailButton user={user} />
+                                                            {user.id !== access.userId && (
                                                                 <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
-                                                            </div>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <StudyGroupSelect
@@ -425,72 +514,7 @@ export default async function AdminPage({
                                     </table>
                                 </div>
                             </section>
-
-                            <section className="grid gap-4">
-                                <h2 className="font-serif text-2xl font-bold">Detalle por usuario</h2>
-                                {filteredUsers.map((user) => (
-                                    <details key={user.id} className="group rounded-xl border border-black/10 bg-white shadow-sm">
-                                        <summary className="flex cursor-pointer list-none flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
-                                            <div className="min-w-0">
-                                                <h3 className="font-serif text-lg font-bold">{user.participantCode ?? 'Sin código'} · {user.name}</h3>
-                                                <p className="break-words text-sm text-[var(--text-secondary)]">{user.email} · Alta: {formatDateTime(user.createdAt)}</p>
-                                            </div>
-                                            <span className="text-sm font-semibold text-[#663820] group-open:hidden">Ver respuestas y fechas</span>
-                                            <span className="hidden text-sm font-semibold text-[#663820] group-open:inline">Ocultar detalle</span>
-                                        </summary>
-                                        <div className="border-t border-black/10 p-4 sm:p-5">
-                                            <Link
-                                                href={`/admin/logs?q=${encodeURIComponent(user.participantCode ?? user.email)}`}
-                                                className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#663820] hover:underline"
-                                            >
-                                                <ScrollText className="size-4" /> Ver sesiones y logs de este participante
-                                            </Link>
-                                            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-                                                {user.stages.map((stage) => {
-                                                    const config = statusConfig[stage.status];
-                                                    const Icon = config.icon;
-                                                    return (
-                                                        <div key={stage.id} className="rounded-lg border border-black/10 p-3">
-                                                            <p className="text-xs font-bold">{stage.shortTitle}</p>
-                                                            <span className={cn('mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', config.className)}>
-                                                                <Icon className="size-3" /> {config.label}
-                                                            </span>
-                                                            {stage.submittedAt && <p className="mt-2 text-xs text-[var(--text-secondary)]"><Clock3 className="mr-1 inline size-3" />{formatDateTime(stage.submittedAt)}</p>}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            {user.responses.length === 0 ? (
-                                                <p className="text-sm text-[var(--text-secondary)]">Este usuario todavía no ha enviado ninguna encuesta.</p>
-                                            ) : (
-                                                <div className="grid gap-5">
-                                                    {user.responses.map((response) => {
-                                                        const stage = user.stages.find((item) => item.id === response.stageId)!;
-                                                        const questions = SURVEY_INSTRUMENTS[stage.type].questions;
-                                                        return (
-                                                            <details key={response.stageId} className="rounded-lg border border-black/10">
-                                                                <summary className="cursor-pointer list-none p-4 font-semibold">
-                                                                    {response.title} · {response.scoreLabel} = {response.computedScore}
-                                                                    <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">{formatDateTime(response.submittedAt)}</span>
-                                                                </summary>
-                                                                <ol className="border-t border-black/10 p-4 text-sm">
-                                                                    {questions.map((question, index) => (
-                                                                        <li key={question} className="grid gap-1 border-b border-black/5 py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:gap-5">
-                                                                            <span><strong>{index + 1}.</strong> {question}</span>
-                                                                            <span className="font-bold text-[#663820]">Respuesta cruda: {response.answers[index]}</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ol>
-                                                            </details>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </details>
-                                ))}
-                            </section>
+                            <PaginationNav page={page} pageSize={USERS_PAGE_SIZE} total={filteredUsers.length} href={usersPageHref} />
                         </>
                     )}
                 </>

@@ -8,6 +8,7 @@ import {
     GROUP_FILTER_OPTIONS,
     PROGRESS_FILTER_OPTIONS,
     hasActiveFilters,
+    serializeAdminFilters,
     type AdminFilters as Filters,
 } from '@/lib/admin/filters';
 
@@ -21,11 +22,7 @@ export default function AdminFilters({ filters, shown, total }: { filters: Filte
     const [isPending, startTransition] = useTransition();
 
     const apply = (next: Filters) => {
-        const params = new URLSearchParams();
-        if (next.q) params.set('q', next.q);
-        if (next.grupo !== 'todos') params.set('grupo', next.grupo);
-        if (next.avance !== 'todos') params.set('avance', next.avance);
-        const search = params.toString();
+        const search = serializeAdminFilters(next);
         startTransition(() => {
             router.replace(search ? `${pathname}?${search}#participantes` : `${pathname}#participantes`, { scroll: false });
         });

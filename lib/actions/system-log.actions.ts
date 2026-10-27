@@ -9,7 +9,7 @@ import { requireUser } from '@/lib/session';
 import { isClientLogEvent, isLogLevel } from '@/lib/system-logs/catalog';
 import {
     LOGS_PAGE_SIZE,
-    SESSIONS_LIST_LIMIT,
+    SESSIONS_PAGE_SIZE,
     logDateRange,
     type SystemLogFilters,
 } from '@/lib/system-logs/filters';
@@ -102,6 +102,8 @@ export interface SystemLogOverview {
     total: number;
     pageSize: number;
     sessions: AdminSessionRow[];
+    sessionsTotal: number;
+    sessionsPageSize: number;
 }
 
 /** Participant conditions shared by the log list and the session list. */
@@ -178,25 +180,35 @@ export const getSystemLogOverview = async (
         if (from) sessionConditions.push(gte(voiceSessions.startedAt, from));
         if (to) sessionConditions.push(lt(voiceSessions.startedAt, to));
 
-        const sessionRows = await db
-            .select({
-                id: voiceSessions.id,
-                startedAt: voiceSessions.startedAt,
-                durationSeconds: voiceSessions.durationSeconds,
-                difficultyLevel: voiceSessions.difficultyLevel,
-                bookTitle: books.title,
-                userId: users.id,
-                participantCode: users.participantCode,
-                userName: users.name,
-                studyGroup: users.studyGroup,
-                turns: sql<number>`(select count(*) from session_turns st where st.session_id = ${voiceSessions.id})`.mapWith(Number),
-            })
-            .from(voiceSessions)
-            .innerJoin(users, eq(voiceSessions.userId, users.id))
-            .innerJoin(books, eq(voiceSessions.bookId, books.id))
-            .where(sessionConditions.length > 0 ? and(...sessionConditions) : undefined)
-            .orderBy(desc(voiceSessions.startedAt))
-            .limit(SESSIONS_LIST_LIMIT);
+        const sessionWhere = sessionConditions.length > 0 ? and(...sessionConditions) : undefined;
+        const [[{ sessionsTotal }], sessionRows] = await Promise.all([
+            db
+                .select({ sessionsTotal: count() })
+                .from(voiceSessions)
+                .innerJoin(users, eq(voiceSessions.userId, users.id))
+                .innerJoin(books, eq(voiceSessions.bookId, books.id))
+                .where(sessionWhere),
+            db
+                .select({
+                    id: voiceSessions.id,
+                    startedAt: voiceSessions.startedAt,
+                    durationSeconds: voiceSessions.durationSeconds,
+                    difficultyLevel: voiceSessions.difficultyLevel,
+                    bookTitle: books.title,
+                    userId: users.id,
+                    participantCode: users.participantCode,
+                    userName: users.name,
+                    studyGroup: users.studyGroup,
+                    turns: sql<number>`(select count(*) from session_turns st where st.session_id = ${voiceSessions.id})`.mapWith(Number),
+                })
+                .from(voiceSessions)
+                .innerJoin(users, eq(voiceSessions.userId, users.id))
+                .innerJoin(books, eq(voiceSessions.bookId, books.id))
+                .where(sessionWhere)
+                .orderBy(desc(voiceSessions.startedAt))
+                .limit(SESSIONS_PAGE_SIZE)
+                .offset((filters.paginaSesiones - 1) * SESSIONS_PAGE_SIZE),
+        ]);
 
         const severity = sessionRows.length === 0
             ? []
@@ -215,7 +227,10 @@ export const getSystemLogOverview = async (
             errors: severity.find((item) => item.sessionId === row.id && item.level === 'error')?.n ?? 0,
         }));
 
-        return { success: true, data: { logs, total, pageSize: LOGS_PAGE_SIZE, sessions } };
+        return {
+            success: true,
+            data: { logs, total, pageSize: LOGS_PAGE_SIZE, sessions, sessionsTotal, sessionsPageSize: SESSIONS_PAGE_SIZE },
+        };
     } catch (e) {
         console.error('Error loading system logs', e);
         return { success: false, error: 'No se pudieron cargar los logs del sistema.' };

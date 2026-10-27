@@ -22,6 +22,16 @@ const MAX_STACK_LENGTH = 1500;
 
 const INSTALLED = Symbol.for('investfied.consoleCapture');
 
+// Node prints its process warnings ("(node:8) ExperimentalWarning: ...") through
+// the same channel. They are not errors and would only bury the real ones.
+const NODE_WARNING = /^\(node:\d+\) (?:\[\w+\] )?\w*Warning\b/;
+
+function isNodeWarning(args: unknown[]): boolean {
+    const [first] = args;
+    if (typeof first === 'string') return NODE_WARNING.test(first.trimStart());
+    return first instanceof Error && first.name.endsWith('Warning');
+}
+
 function describeArg(arg: unknown): string {
     if (arg instanceof Error) return arg.message || arg.name;
     if (typeof arg === 'string') return arg;
@@ -61,7 +71,7 @@ export function installConsoleErrorCapture(): void {
     console.error = (...args: unknown[]) => {
         original(...args);
         // Guards against re-entry while the row is being built and sent.
-        if (writing) return;
+        if (writing || isNodeWarning(args)) return;
         writing = true;
         try {
             mirror(args);

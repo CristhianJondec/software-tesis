@@ -1,13 +1,14 @@
 import Link from 'next/link';
-import { ArrowLeft, ChevronLeft, ChevronRight, ScrollText, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ScrollText, ShieldCheck } from 'lucide-react';
 
+import PaginationNav from '@/components/admin/PaginationNav';
 import SystemLogFilters from '@/components/admin/SystemLogFilters';
 import SystemLogList from '@/components/admin/SystemLogList';
 import { getSystemLogOverview } from '@/lib/actions/system-log.actions';
 import { checkAdminAccess } from '@/lib/admin/access';
 import { formatDateTime } from '@/lib/metrics/format';
 import { STUDY_GROUP_LABELS, normalizeStudyGroup } from '@/lib/study/groups';
-import { parseSystemLogFilters, serializeSystemLogFilters, SESSIONS_LIST_LIMIT } from '@/lib/system-logs/filters';
+import { parseSystemLogFilters, serializeSystemLogFilters, type SystemLogFilters as LogFilters } from '@/lib/system-logs/filters';
 import { formatDuration } from '@/lib/utils';
 
 export const metadata = { title: 'Logs del sistema — Investfied' };
@@ -34,9 +35,9 @@ export default async function SystemLogsPage({
     const filters = parseSystemLogFilters(await searchParams);
     const result = await getSystemLogOverview(filters);
 
-    const pageHref = (pagina: number) => {
-        const search = serializeSystemLogFilters({ ...filters, pagina });
-        return search ? `/admin/logs?${search}` : '/admin/logs';
+    const pageHref = (changes: Partial<LogFilters>, anchor: string) => {
+        const search = serializeSystemLogFilters({ ...filters, ...changes });
+        return `${search ? `/admin/logs?${search}` : '/admin/logs'}#${anchor}`;
     };
 
     return (
@@ -68,10 +69,11 @@ export default async function SystemLogsPage({
                 </p>
             ) : (
                 <>
-                    <section className="mb-10">
+                    <section id="sesiones" className="mb-10 scroll-mt-24">
                         <h2 className="mb-1 font-serif text-2xl font-bold">Sesiones</h2>
                         <p className="mb-3 text-sm text-[var(--text-secondary)]">
-                            Filtradas por participante, grupo y fechas. Se muestran las {SESSIONS_LIST_LIMIT} más recientes.
+                            Filtradas por participante, grupo y fechas. {result.data.sessionsTotal}{' '}
+                            {result.data.sessionsTotal === 1 ? 'sesión' : 'sesiones'}, de la más reciente a la más antigua.
                         </p>
                         {result.data.sessions.length === 0 ? (
                             <p className="rounded-xl border border-dashed border-black/20 bg-white p-8 text-center text-sm text-[var(--text-secondary)]">
@@ -125,9 +127,17 @@ export default async function SystemLogsPage({
                                 </table>
                             </div>
                         )}
+                        <PaginationNav
+                            page={filters.paginaSesiones}
+                            pageSize={result.data.sessionsPageSize}
+                            total={result.data.sessionsTotal}
+                            href={(paginaSesiones) => pageHref({ paginaSesiones }, 'sesiones')}
+                            previousLabel="Más recientes"
+                            nextLabel="Más antiguas"
+                        />
                     </section>
 
-                    <section>
+                    <section id="eventos" className="scroll-mt-24">
                         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                             <div>
                                 <h2 className="font-serif text-2xl font-bold">Eventos</h2>
@@ -137,23 +147,14 @@ export default async function SystemLogsPage({
                             </div>
                         </div>
                         <SystemLogList logs={result.data.logs} showParticipant />
-                        {result.data.total > result.data.pageSize && (
-                            <nav className="mt-4 flex items-center justify-between text-sm" aria-label="Paginación">
-                                {filters.pagina > 1 ? (
-                                    <Link href={pageHref(filters.pagina - 1)} className="inline-flex items-center gap-1 font-semibold text-[#663820] hover:underline">
-                                        <ChevronLeft className="size-4" /> Más recientes
-                                    </Link>
-                                ) : <span />}
-                                <span className="text-[var(--text-secondary)]">
-                                    Página {filters.pagina} de {Math.ceil(result.data.total / result.data.pageSize)}
-                                </span>
-                                {filters.pagina * result.data.pageSize < result.data.total ? (
-                                    <Link href={pageHref(filters.pagina + 1)} className="inline-flex items-center gap-1 font-semibold text-[#663820] hover:underline">
-                                        Más antiguos <ChevronRight className="size-4" />
-                                    </Link>
-                                ) : <span />}
-                            </nav>
-                        )}
+                        <PaginationNav
+                            page={filters.pagina}
+                            pageSize={result.data.pageSize}
+                            total={result.data.total}
+                            href={(pagina) => pageHref({ pagina }, 'eventos')}
+                            previousLabel="Más recientes"
+                            nextLabel="Más antiguos"
+                        />
                     </section>
                 </>
             )}

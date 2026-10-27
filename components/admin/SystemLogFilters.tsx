@@ -24,7 +24,7 @@ export default function SystemLogFilters({ filters }: { filters: Filters }) {
     const [isPending, startTransition] = useTransition();
 
     const apply = (next: Partial<Filters>) => {
-        const search = serializeSystemLogFilters({ ...filters, q: query.trim(), ...next, pagina: 1 });
+        const search = serializeSystemLogFilters({ ...filters, q: query.trim(), ...next, pagina: 1, paginaSesiones: 1 });
         startTransition(() => {
             router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
         });
