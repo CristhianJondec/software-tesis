@@ -93,6 +93,10 @@ export interface FileUploadFieldProps<T extends FieldValues> {
     icon: LucideIcon;
     placeholder: string;
     hint: string;
+    /** Subtle line shown below the field, e.g. which file types are allowed. */
+    note?: string;
+    /** Toast shown when the picked file is not one of `acceptTypes`. */
+    invalidTypeMessage?: string;
 }
 
 export interface StartSessionInput {

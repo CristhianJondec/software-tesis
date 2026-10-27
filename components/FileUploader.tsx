@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useController, FieldValues } from 'react-hook-form';
 import { ExternalLink, FileText, RefreshCw, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { FileUploadFieldProps } from '@/types';
 import { cn } from '@/lib/utils';
 import { FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
@@ -111,6 +112,8 @@ const FileUploader = <T extends FieldValues>({
     icon: Icon,
     placeholder,
     hint,
+    note,
+    invalidTypeMessage = 'Tipo de archivo no permitido.',
 }: FileUploadFieldProps<T>) => {
     const {
         field: { onChange, value },
@@ -122,11 +125,18 @@ const FileUploader = <T extends FieldValues>({
     const handleFileChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
-            if (file) {
-                onChange(file);
+            if (!file) return;
+
+            // `accept` only filters the picker; "All files" still lets anything through.
+            if (!acceptTypes.includes(file.type)) {
+                toast.error(invalidTypeMessage);
+                e.target.value = '';
+                return;
             }
+
+            onChange(file);
         },
-        [onChange]
+        [onChange, acceptTypes, invalidTypeMessage]
     );
 
     const onRemove = useCallback(
@@ -189,6 +199,7 @@ const FileUploader = <T extends FieldValues>({
                     )}
                 </div>
             </FormControl>
+            {note && <p className="text-xs text-[var(--text-secondary)]">{note}</p>}
             <FormMessage />
         </FormItem>
     );

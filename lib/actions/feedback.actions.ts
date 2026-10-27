@@ -3,6 +3,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import { db } from '@/database/db';
 import { bookSegments, sessionTurns, turnFeedback, turnRetrievals, voiceSessions } from '@/database/schema';
@@ -20,7 +21,9 @@ import {
     type StoredFeedbackRow,
 } from '@/lib/feedback/report';
 import { geminiJudge, JUDGE_MODEL } from '@/lib/metrics/judge';
+import { requireAdmin } from '@/lib/admin/access';
 import { requireUser } from '@/lib/session';
+import { writeSystemLog } from '@/lib/system-logs/write.server';
 
 /**
  * Server actions behind the post-session report (docs/propuestas/02).
@@ -179,11 +182,33 @@ export interface EvaluateSessionFeedbackResult {
  * one that followed no question, is left without a verdict on purpose (see
  * `lib/feedback/evaluate.ts`) and is not counted as remaining work.
  */
+/**
+ * Read-only copy of the report for the admin's session view
+ * (/admin/sesiones/[id]). The only exception to the ownership scope above, and
+ * it never runs the judge: that stays an action of the student.
+ */
+export const getSessionFeedbackForAdmin = async (sessionId: string): Promise<SessionFeedbackResult> => {
+    try {
+        await requireAdmin();
+
+        const evidence = await loadSessionEvidence(sessionId);
+        const report = buildSessionFeedbackReport(evidence);
+
+        return {
+            success: true,
+            data: { ...report, judgeModel: JUDGE_MODEL, promptVersion: FEEDBACK_PROMPT_VERSION },
+        };
+    } catch (e) {
+        console.error('Error building session feedback for admin', e);
+        return { success: false, error: (e as Error).message || 'No se pudo cargar el informe.' };
+    }
+};
+
 export const evaluateSessionFeedback = async (
     sessionId: string,
 ): Promise<EvaluateSessionFeedbackResult> => {
     try {
-        await requireOwnedSession(sessionId);
+        const owned = await requireOwnedSession(sessionId);
 
         if (!process.env.GEMINI_API_KEY) {
             return { success: false, error: 'Falta GEMINI_API_KEY: el juez no puede ejecutarse.' };
@@ -196,6 +221,7 @@ export const evaluateSessionFeedback = async (
         );
 
         const batch = pending.slice(0, FEEDBACK_BATCH_SIZE);
+        const judgeStartedAt = Date.now();
         let evaluated = 0;
         let failed = 0;
 
@@ -235,6 +261,17 @@ export const evaluateSessionFeedback = async (
         }
 
         revalidatePath(`/history/${sessionId}`);
+
+        after(writeSystemLog({
+            level: failed > 0 ? 'warn' : 'info',
+            source: 'server',
+            event: 'feedback.evaluated',
+            message: `${evaluated} respuesta(s) evaluada(s)${failed > 0 ? `, ${failed} con error` : ''}.`,
+            sessionId,
+            userId: owned.userId,
+            durationMs: Date.now() - judgeStartedAt,
+            metadata: { evaluated, failed, remaining: pending.length - evaluated, judgeModel: JUDGE_MODEL },
+        }));
 
         return {
             success: true,

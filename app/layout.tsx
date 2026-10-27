@@ -7,6 +7,8 @@ import {Toaster} from "@/components/ui/sonner";
 import {checkMetricsAccess} from "@/lib/metrics/access";
 import {checkAdminAccess} from "@/lib/admin/access";
 import {getStudyContext} from "@/lib/study/access";
+import {getImpersonation} from "@/lib/session";
+import {ImpersonationBanner} from "@/components/admin/ImpersonateButton";
 
 const ibmPlexSerif = IBM_Plex_Serif({
     variable: "--font-ibm-plex-serif",
@@ -36,10 +38,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [metricsAccess, adminAccess, studyContext] = await Promise.all([
+  const [metricsAccess, adminAccess, studyContext, impersonation] = await Promise.all([
     checkMetricsAccess(),
     checkAdminAccess(),
     getStudyContext(),
+    getImpersonation(),
   ]);
 
   return (
@@ -47,6 +50,11 @@ export default async function RootLayout({
       <body
         className={`${ibmPlexSerif.variable} ${monaSans.variable} relative font-sans antialiased`}
       >
+        {impersonation && (
+          <ImpersonationBanner
+            label={`${impersonation.participantCode ?? 'Sin código'} · ${impersonation.name}`}
+          />
+        )}
         <Navbar
           showMetrics={metricsAccess.allowed}
           showAdmin={adminAccess.allowed}

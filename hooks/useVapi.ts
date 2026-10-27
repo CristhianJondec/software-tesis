@@ -34,6 +34,7 @@ import {
     saveSessionTurn,
     updateSessionTurn,
 } from '@/lib/actions/session.actions';
+import { logClientEvent, type ClientLogInput } from '@/lib/actions/system-log.actions';
 import {
     mergeAdjacentTranscriptMessage,
     mergeTranscriptFragments,
@@ -67,6 +68,28 @@ const SECONDS_PER_MINUTE = 60;
 /** Joins TTS chunks into one readable text, without doubled spaces. */
 function joinSpokenChunks(chunks: string[]): string {
     return chunks.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Reports an event to the admin's system log (/admin/logs). Fire and forget: a
+ * failed log must never touch the live conversation.
+ */
+function reportEvent(input: ClientLogInput) {
+    void logClientEvent(input).catch(() => undefined);
+}
+
+/** Readable text of whatever the Vapi SDK emits as an error (often not an Error). */
+function describeVapiError(error: unknown): string {
+    if (error instanceof Error) return error.message || error.name;
+    if (typeof error === 'string') return error;
+    const nested = error as { error?: { message?: unknown; msg?: unknown }; message?: unknown } | null;
+    const candidate = nested?.error?.message ?? nested?.error?.msg ?? nested?.message;
+    if (typeof candidate === 'string' && candidate) return candidate;
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return 'Error desconocido';
+    }
 }
 
 let vapi: InstanceType<typeof Vapi>;
@@ -204,6 +227,13 @@ export function useVapi(book: IBook) {
                     const result = await updateSessionTurn({ turnId, ...snapshot });
                     if (!result.success) {
                         console.error('Failed to extend session turn:', result.error);
+                        reportEvent({
+                            event: 'turn.save_failed',
+                            level: 'error',
+                            message: `No se pudo extender el turno: ${result.error ?? 'error desconocido'}`,
+                            sessionId,
+                            metadata: { role, turnId },
+                        });
                     }
                 });
                 trackSave(active.updateQueue);
@@ -230,12 +260,26 @@ export function useVapi(book: IBook) {
                 .then((result) => {
                     if (!result.success) {
                         console.error('Failed to save session turn:', result.error);
+                        reportEvent({
+                            event: 'turn.save_failed',
+                            level: 'error',
+                            message: `No se pudo guardar el turno ${turnIndex}: ${result.error ?? 'error desconocido'}`,
+                            sessionId,
+                            metadata: { role, turnIndex },
+                        });
                         return null;
                     }
                     return result.turnId ?? null;
                 })
                 .catch((error) => {
                     console.error('Failed to save session turn:', error);
+                    reportEvent({
+                        event: 'turn.save_failed',
+                        level: 'error',
+                        message: `No se pudo guardar el turno ${turnIndex}: ${describeVapiError(error)}`,
+                        sessionId,
+                        metadata: { role, turnIndex },
+                    });
                     return null;
                 });
             trackSave(turnIdPromise);
@@ -293,6 +337,12 @@ export function useVapi(book: IBook) {
                 wrapUpSentRef.current = false;
                 resetTurnTracking();
                 setStatus('starting'); // AI speaks first, wait for it
+                reportEvent({
+                    event: 'vapi.call_started',
+                    level: 'info',
+                    message: 'La llamada se conectó con Vapi.',
+                    sessionId: sessionIdRef.current,
+                });
                 setCurrentMessage('');
                 setCurrentUserMessage('');
                 setIsMuted(false);
@@ -318,6 +368,13 @@ export function useVapi(book: IBook) {
                         const wrapUpAt = maxDurationRef.current - wrapUpLeadSeconds;
                         if (!wrapUpSentRef.current && newDuration >= wrapUpAt) {
                             wrapUpSentRef.current = true;
+                            reportEvent({
+                                event: 'session.wrap_up_sent',
+                                level: 'info',
+                                message: `Aviso de cierre enviado al segundo ${newDuration}.`,
+                                sessionId: sessionIdRef.current,
+                                metadata: { atSecond: newDuration, maxDurationSeconds: maxDurationRef.current },
+                            });
                             getVapi().send({
                                 type: 'add-message',
                                 message: {
@@ -333,6 +390,13 @@ export function useVapi(book: IBook) {
                         // Check duration limit
                         if (newDuration >= maxDurationRef.current && !isStoppingRef.current) {
                             isStoppingRef.current = true;
+                            reportEvent({
+                                event: 'session.limit_reached',
+                                level: 'warn',
+                                message: `La sesión alcanzó su límite de ${maxDurationRef.current} s y se cortó.`,
+                                sessionId: sessionIdRef.current,
+                                metadata: { maxDurationSeconds: maxDurationRef.current },
+                            });
                             getVapi().stop();
                             setLimitError(
                                 maxDurationRef.current < MAX_SESSION_DURATION_MINUTES * SECONDS_PER_MINUTE
@@ -361,6 +425,19 @@ export function useVapi(book: IBook) {
                 // End session tracking
                 if (sessionIdRef.current) {
                     const endedSessionId = sessionIdRef.current;
+                    reportEvent({
+                        event: 'vapi.call_ended',
+                        level: 'info',
+                        message: isStoppingRef.current
+                            ? 'Llamada terminada desde la aplicación (colgar o límite de tiempo).'
+                            : 'Llamada terminada por Vapi o por la red.',
+                        sessionId: endedSessionId,
+                        metadata: {
+                            durationSeconds: durationRef.current,
+                            turns: turnIndexRef.current,
+                            endedByApp: isStoppingRef.current,
+                        },
+                    });
                     endVoiceSession(endedSessionId, durationRef.current).catch((err) =>
                         console.error('Failed to end voice session:', err),
                     );
@@ -439,8 +516,14 @@ export function useVapi(book: IBook) {
                 // Diagnostic only: tells an agent cut by student speech or noise
                 // (stopSpeakingPlan, dashboard) apart from one cut by maxTokens.
                 if (message.type === 'user-interrupted') {
-                    console.info('[vapi] agent interrupted by the student', {
-                        spokenSoFar: joinSpokenChunks(assistantChunksRef.current),
+                    const spokenSoFar = joinSpokenChunks(assistantChunksRef.current);
+                    console.info('[vapi] agent interrupted by the student', { spokenSoFar });
+                    reportEvent({
+                        event: 'vapi.user_interrupted',
+                        level: 'info',
+                        message: 'El estudiante empezó a hablar mientras el agente hablaba.',
+                        sessionId: sessionIdRef.current,
+                        metadata: { spokenSoFar },
                     });
                     return;
                 }
@@ -522,6 +605,13 @@ export function useVapi(book: IBook) {
 
             error: (error: Error) => {
                 console.error('Vapi error:', error);
+                reportEvent({
+                    event: 'vapi.error',
+                    level: 'error',
+                    message: describeVapiError(error),
+                    sessionId: sessionIdRef.current,
+                    metadata: { durationSeconds: durationRef.current, turns: turnIndexRef.current },
+                });
                 // Don't reset isStoppingRef here - delayed events may still fire
                 commitAssistantTurn();
                 setStatus('idle');
@@ -737,6 +827,16 @@ export function useVapi(book: IBook) {
             }
         } catch (err) {
             console.error('Failed to start call:', err);
+            reportEvent({
+                event: 'vapi.start_failed',
+                level: 'error',
+                message: describeVapiError(err),
+                sessionId: sessionIdRef.current,
+                metadata: {
+                    micPermissionDenied: err instanceof DOMException && err.name === 'NotAllowedError',
+                    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+                },
+            });
             setStatus('idle');
             setLimitError(
                 'No se pudo iniciar la conversación. Revisa tu conexión, el permiso del micrófono y la disponibilidad de los servicios externos.',

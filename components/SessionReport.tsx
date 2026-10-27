@@ -15,6 +15,8 @@ interface SessionReportProps {
     report: SessionFeedbackReport;
     judgeModel: string;
     promptVersion: string;
+    /** Admin view: hides the judge button, which only the student can run. */
+    readOnly?: boolean;
 }
 
 /** 0-3 as "2 de 3", or the absence of a measurement as such. */
@@ -172,6 +174,7 @@ export default function SessionReport({
     report,
     judgeModel,
     promptVersion,
+    readOnly = false,
 }: SessionReportProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -247,10 +250,12 @@ export default function SessionReport({
                         {coverage.unprompted > 0 && ` · ${coverage.unprompted} sin pregunta previa`}
                     </p>
 
-                    <Button onClick={handleEvaluate} disabled={isPending || coverage.pending === 0} className="w-fit">
-                        <RefreshCw className={`icon-sm ${isPending ? 'animate-spin' : ''}`} />
-                        {isPending ? 'Evaluando…' : `Evaluar pendientes (${coverage.pending})`}
-                    </Button>
+                    {!readOnly && (
+                        <Button onClick={handleEvaluate} disabled={isPending || coverage.pending === 0} className="w-fit">
+                            <RefreshCw className={`icon-sm ${isPending ? 'animate-spin' : ''}`} />
+                            {isPending ? 'Evaluando…' : `Evaluar pendientes (${coverage.pending})`}
+                        </Button>
+                    )}
                 </div>
 
                 <p className="mt-2 text-xs text-[#6b7280]">

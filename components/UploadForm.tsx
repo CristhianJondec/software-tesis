@@ -173,6 +173,8 @@ const UploadForm = () => {
                             icon={Upload}
                             placeholder="Haz clic para subir el PDF"
                             hint="Archivo PDF (máx. 50MB)"
+                            note="Solo se aceptan archivos PDF."
+                            invalidTypeMessage="Solo se aceptan archivos PDF."
                             disabled={isSubmitting}
                         />
 
@@ -185,6 +187,7 @@ const UploadForm = () => {
                             icon={ImageIcon}
                             placeholder="Haz clic para subir la imagen de portada"
                             hint="Déjalo vacío para generar automáticamente desde el PDF"
+                            invalidTypeMessage="Solo se aceptan imágenes JPG, PNG o WEBP."
                             disabled={isSubmitting}
                         />
 

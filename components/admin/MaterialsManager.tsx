@@ -132,7 +132,15 @@ export default function MaterialsManager({ materials }: { materials: StudyMateri
                         disabled={isUploading}
                         required
                         className="h-auto py-2 text-sm file:mr-3 file:rounded-md file:bg-[#fff6e5] file:px-3 file:text-[#663820]"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file && !ACCEPTED_PDF_TYPES.includes(file.type)) {
+                                toast.error('Solo se aceptan archivos PDF.');
+                                event.target.value = '';
+                            }
+                        }}
                     />
+                    <p className="text-xs text-[var(--text-secondary)]">Solo se aceptan archivos PDF.</p>
                 </div>
                 <Button type="submit" disabled={isUploading} className="bg-[#663820] hover:bg-[#7a4528]">
                     <Upload className="size-4" />

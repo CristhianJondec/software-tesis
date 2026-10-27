@@ -1,6 +1,7 @@
 'use server';
 
 import { and, asc, count, desc, eq } from 'drizzle-orm';
+import { after } from 'next/server';
 import { nanoid } from 'nanoid';
 
 import { db } from '@/database/db';
@@ -14,6 +15,7 @@ import {
     turnRetrievals,
     voiceSessions,
 } from '@/database/schema';
+import { requireAdmin } from '@/lib/admin/access';
 import { requireUser } from '@/lib/session';
 import { requireInterventionAccess } from '@/lib/study/access';
 import { MAX_SESSION_DURATION_MINUTES } from '@/lib/constants';
@@ -39,6 +41,7 @@ import { getCurrentBillingPeriodStart } from '@/lib/subscription-constants';
 import { MIN_SECONDS_TO_START_SESSION } from '@/lib/study/usage';
 import { getVoiceAllowance } from '@/lib/study/usage.server';
 import { getVapiCallDetails } from '@/lib/vapi.server';
+import { writeSystemLog } from '@/lib/system-logs/write.server';
 import type {
     EndSessionResult,
     LinkVapiCallResult,
@@ -171,6 +174,16 @@ export const startVoiceSession = async (
         }
         const user = await requireUser();
         const userId = user.id;
+        // Logged after the response: a rejected start is not part of any session.
+        const logRejected = (reason: string) =>
+            after(writeSystemLog({
+                level: 'warn',
+                source: 'server',
+                event: 'session.start_rejected',
+                message: reason,
+                userId,
+                metadata: { bookId },
+            }));
 
         const ownerCheck = await db
             .select({ id: books.id })
@@ -186,6 +199,7 @@ export const startVoiceSession = async (
         // session is also shortened so it can never run past what is left.
         const allowance = await getVoiceAllowance(userId);
         if (allowance.remainingSeconds !== null && allowance.remainingSeconds < MIN_SECONDS_TO_START_SESSION) {
+            logRejected(`Sin tiempo de uso disponible (límite ${allowance.limitMinutes} min).`);
             return {
                 success: false,
                 error: `Alcanzaste el tiempo total de uso del agente asignado a tu cuenta (${allowance.limitMinutes} minutos).`,
@@ -257,6 +271,24 @@ export const startVoiceSession = async (
             }
         }
 
+        after(writeSystemLog({
+            level: 'info',
+            source: 'server',
+            event: 'session.started',
+            message: `Nivel ${difficultyLevel} (${levelSource === 'auto' ? 'sugerido' : 'elegido por el estudiante'}).`,
+            sessionId: session.id,
+            userId,
+            metadata: {
+                bookId,
+                difficultyLevel,
+                levelSource,
+                suggestedLevel: suggestion.level,
+                preSessionAnxiety,
+                maxDurationSeconds: Number.isFinite(maxDurationSeconds) ? maxDurationSeconds : null,
+                focusTopics,
+            },
+        }));
+
         return {
             success: true,
             sessionId: session.id,
@@ -308,6 +340,15 @@ export const savePostSessionAnxiety = async (
             .set({ postSessionAnxiety: score, updatedAt: new Date() })
             .where(eq(voiceSessions.id, sessionId));
 
+        after(writeSystemLog({
+            level: 'info',
+            source: 'server',
+            event: 'session.post_anxiety_saved',
+            message: `Autoevaluación final: ${score} / 10.`,
+            sessionId,
+            userId: user.id,
+        }));
+
         return { success: true };
     } catch (e) {
         console.error('Error saving post-session anxiety', e);
@@ -330,6 +371,16 @@ export const endVoiceSession = async (
         if (result.length === 0) {
             return { success: false, error: 'Voice session not found.' };
         }
+
+        after(writeSystemLog({
+            level: 'info',
+            source: 'server',
+            event: 'session.ended',
+            message: `Duración registrada: ${durationSeconds} s.`,
+            sessionId,
+            userId: user.id,
+            metadata: { durationSeconds },
+        }));
 
         return { success: true };
     } catch (e) {
@@ -359,6 +410,16 @@ export const linkVapiCall = async (
         if (result.length === 0) {
             return { success: false, error: 'Voice session not found.' };
         }
+
+        after(writeSystemLog({
+            level: 'info',
+            source: 'server',
+            event: 'vapi.call_linked',
+            message: `Llamada ${normalizedCallId}.`,
+            sessionId,
+            userId: user.id,
+            metadata: { vapiCallId: normalizedCallId },
+        }));
 
         return { success: true };
     } catch (e) {
@@ -540,99 +601,122 @@ export const getConversationHistory = async (bookId?: string) => {
     }
 };
 
+/**
+ * Loads one session with its turns, retrievals and evaluations. `ownerId`
+ * restricts it to that user's sessions; null is only passed by the admin
+ * variant, after `requireAdmin`.
+ */
+const loadConversation = async (sessionId: string, ownerId: string | null) => {
+    const [conversation] = await db
+        .select({
+            id: voiceSessions.id,
+            bookId: voiceSessions.bookId,
+            bookTitle: books.title,
+            bookAuthor: books.author,
+            startedAt: voiceSessions.startedAt,
+            endedAt: voiceSessions.endedAt,
+            durationSeconds: voiceSessions.durationSeconds,
+            difficultyLevel: voiceSessions.difficultyLevel,
+            levelSource: voiceSessions.levelSource,
+            preSessionAnxiety: voiceSessions.preSessionAnxiety,
+            postSessionAnxiety: voiceSessions.postSessionAnxiety,
+            vapiCallId: voiceSessions.vapiCallId,
+        })
+        .from(voiceSessions)
+        .innerJoin(books, eq(voiceSessions.bookId, books.id))
+        .where(
+            ownerId === null
+                ? eq(voiceSessions.id, sessionId)
+                : and(eq(voiceSessions.id, sessionId), eq(voiceSessions.userId, ownerId)),
+        )
+        .limit(1);
+
+    if (!conversation) {
+        return { success: false, error: 'Conversación no encontrada.' };
+    }
+
+    const turns = await db
+        .select({
+            id: sessionTurns.id,
+            role: sessionTurns.role,
+            content: sessionTurns.content,
+            turnIndex: sessionTurns.turnIndex,
+            startedAt: sessionTurns.startedAt,
+            endedAt: sessionTurns.endedAt,
+            studentLatencyMs: sessionTurns.studentLatencyMs,
+            systemLatencyMs: sessionTurns.systemLatencyMs,
+            maxPauseMs: sessionTurns.maxPauseMs,
+        })
+        .from(sessionTurns)
+        .where(eq(sessionTurns.sessionId, conversation.id))
+        .orderBy(asc(sessionTurns.turnIndex));
+
+    const retrievals = await db
+        .select({
+            id: turnRetrievals.id,
+            turnId: turnRetrievals.turnId,
+            query: turnRetrievals.query,
+            rank: turnRetrievals.rank,
+            distance: turnRetrievals.distance,
+            content: bookSegments.content,
+            pageNumber: bookSegments.pageNumber,
+        })
+        .from(turnRetrievals)
+        .innerJoin(bookSegments, eq(turnRetrievals.segmentId, bookSegments.id))
+        .where(eq(turnRetrievals.sessionId, conversation.id))
+        .orderBy(asc(turnRetrievals.createdAt), asc(turnRetrievals.rank));
+
+    const humanEvaluations = await db
+        .select({
+            turnId: turnEvaluations.turnId,
+            isCorrect: turnEvaluations.isCorrect,
+        })
+        .from(turnEvaluations)
+        .innerJoin(sessionTurns, eq(turnEvaluations.turnId, sessionTurns.id))
+        .where(eq(sessionTurns.sessionId, conversation.id));
+
+    const ragas = await db
+        .select({
+            turnId: ragasEvaluations.turnId,
+            promptVersion: ragasEvaluations.promptVersion,
+            faithfulness: ragasEvaluations.faithfulness,
+            answerRelevancy: ragasEvaluations.answerRelevancy,
+            contextPrecision: ragasEvaluations.contextPrecision,
+            contextRecall: ragasEvaluations.contextRecall,
+            computedAt: ragasEvaluations.computedAt,
+        })
+        .from(ragasEvaluations)
+        .innerJoin(sessionTurns, eq(ragasEvaluations.turnId, sessionTurns.id))
+        .where(eq(sessionTurns.sessionId, conversation.id))
+        .orderBy(desc(ragasEvaluations.computedAt));
+
+    const vapi = conversation.vapiCallId
+        ? await getVapiCallDetails(conversation.vapiCallId)
+        : { status: 'not-linked' as const };
+
+    return {
+        success: true,
+        data: { conversation, turns, retrievals, humanEvaluations, ragas, vapi },
+    };
+};
+
 export const getConversationById = async (sessionId: string) => {
     try {
         const user = await requireUser();
-
-        const [conversation] = await db
-            .select({
-                id: voiceSessions.id,
-                bookId: voiceSessions.bookId,
-                bookTitle: books.title,
-                bookAuthor: books.author,
-                startedAt: voiceSessions.startedAt,
-                endedAt: voiceSessions.endedAt,
-                durationSeconds: voiceSessions.durationSeconds,
-                difficultyLevel: voiceSessions.difficultyLevel,
-                levelSource: voiceSessions.levelSource,
-                preSessionAnxiety: voiceSessions.preSessionAnxiety,
-                postSessionAnxiety: voiceSessions.postSessionAnxiety,
-                vapiCallId: voiceSessions.vapiCallId,
-            })
-            .from(voiceSessions)
-            .innerJoin(books, eq(voiceSessions.bookId, books.id))
-            .where(and(eq(voiceSessions.id, sessionId), eq(voiceSessions.userId, user.id)))
-            .limit(1);
-
-        if (!conversation) {
-            return { success: false, error: 'Conversación no encontrada.' };
-        }
-
-        const turns = await db
-            .select({
-                id: sessionTurns.id,
-                role: sessionTurns.role,
-                content: sessionTurns.content,
-                turnIndex: sessionTurns.turnIndex,
-                startedAt: sessionTurns.startedAt,
-                endedAt: sessionTurns.endedAt,
-                studentLatencyMs: sessionTurns.studentLatencyMs,
-                systemLatencyMs: sessionTurns.systemLatencyMs,
-                maxPauseMs: sessionTurns.maxPauseMs,
-            })
-            .from(sessionTurns)
-            .where(eq(sessionTurns.sessionId, conversation.id))
-            .orderBy(asc(sessionTurns.turnIndex));
-
-        const retrievals = await db
-            .select({
-                id: turnRetrievals.id,
-                turnId: turnRetrievals.turnId,
-                query: turnRetrievals.query,
-                rank: turnRetrievals.rank,
-                distance: turnRetrievals.distance,
-                content: bookSegments.content,
-                pageNumber: bookSegments.pageNumber,
-            })
-            .from(turnRetrievals)
-            .innerJoin(bookSegments, eq(turnRetrievals.segmentId, bookSegments.id))
-            .where(eq(turnRetrievals.sessionId, conversation.id))
-            .orderBy(asc(turnRetrievals.createdAt), asc(turnRetrievals.rank));
-
-        const humanEvaluations = await db
-            .select({
-                turnId: turnEvaluations.turnId,
-                isCorrect: turnEvaluations.isCorrect,
-            })
-            .from(turnEvaluations)
-            .innerJoin(sessionTurns, eq(turnEvaluations.turnId, sessionTurns.id))
-            .where(eq(sessionTurns.sessionId, conversation.id));
-
-        const ragas = await db
-            .select({
-                turnId: ragasEvaluations.turnId,
-                promptVersion: ragasEvaluations.promptVersion,
-                faithfulness: ragasEvaluations.faithfulness,
-                answerRelevancy: ragasEvaluations.answerRelevancy,
-                contextPrecision: ragasEvaluations.contextPrecision,
-                contextRecall: ragasEvaluations.contextRecall,
-                computedAt: ragasEvaluations.computedAt,
-            })
-            .from(ragasEvaluations)
-            .innerJoin(sessionTurns, eq(ragasEvaluations.turnId, sessionTurns.id))
-            .where(eq(sessionTurns.sessionId, conversation.id))
-            .orderBy(desc(ragasEvaluations.computedAt));
-
-        const vapi = conversation.vapiCallId
-            ? await getVapiCallDetails(conversation.vapiCallId)
-            : { status: 'not-linked' as const };
-
-        return {
-            success: true,
-            data: { conversation, turns, retrievals, humanEvaluations, ragas, vapi },
-        };
+        return await loadConversation(sessionId, user.id);
     } catch (e) {
         console.error('Error fetching conversation', e);
+        return { success: false, error: 'No se pudo cargar la conversación.' };
+    }
+};
+
+/** Admin view of any participant's session (/admin/sesiones/[id]). */
+export const getConversationByIdForAdmin = async (sessionId: string) => {
+    try {
+        await requireAdmin();
+        return await loadConversation(sessionId, null);
+    } catch (e) {
+        console.error('Error fetching conversation for admin', e);
         return { success: false, error: 'No se pudo cargar la conversación.' };
     }
 };

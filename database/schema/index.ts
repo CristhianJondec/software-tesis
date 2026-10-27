@@ -12,3 +12,4 @@ export * from './surveyResponses';
 export * from './turnFeedback';
 export * from './sessionClosings';
 export * from './studyMaterials';
+export * from './systemLogs';

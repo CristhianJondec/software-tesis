@@ -1,6 +1,8 @@
-import { Check, Circle, Clock3, LockKeyhole, Minus, ShieldCheck, UsersRound } from 'lucide-react';
+import Link from 'next/link';
+import { Check, Circle, Clock3, LockKeyhole, Minus, ScrollText, ShieldCheck, UsersRound } from 'lucide-react';
 
 import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
+import { ImpersonateButton } from '@/components/admin/ImpersonateButton';
 import AdminFilters from '@/components/admin/AdminFilters';
 import ExportThesisXlsxButton from '@/components/admin/ExportThesisXlsxButton';
 import MaterialsManager from '@/components/admin/MaterialsManager';
@@ -95,6 +97,12 @@ export default async function AdminPage({
                     </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
+                    <Link
+                        href="/admin/logs"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/15 bg-white px-4 py-2 text-sm font-semibold text-[#663820] shadow-sm transition-colors hover:bg-[#fff6e5]"
+                    >
+                        <ScrollText className="size-4" /> Logs del sistema
+                    </Link>
                     <ExportThesisXlsxButton />
                     <ExportSurveyCsvButton />
                 </div>
@@ -212,9 +220,14 @@ export default async function AdminPage({
                                 <ul className="divide-y divide-black/5 xl:hidden">
                                     {filteredUsers.map((user) => (
                                         <li key={user.id} className="grid gap-4 p-4 sm:p-5">
-                                            <div className="min-w-0">
-                                                <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
-                                                <p className="truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
+                                                    <p className="truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                                </div>
+                                                {user.id !== access.userId && (
+                                                    <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
+                                                )}
                                             </div>
                                             <div className="grid gap-3 sm:grid-cols-2">
                                                 <div className="grid gap-1">
@@ -293,6 +306,11 @@ export default async function AdminPage({
                                                     <td className="px-4 py-3">
                                                         <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
                                                         <p className="max-w-56 truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                                        {user.id !== access.userId && (
+                                                            <div className="mt-2">
+                                                                <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <StudyGroupSelect
@@ -352,6 +370,12 @@ export default async function AdminPage({
                                             <span className="hidden text-sm font-semibold text-[#663820] group-open:inline">Ocultar detalle</span>
                                         </summary>
                                         <div className="border-t border-black/10 p-4 sm:p-5">
+                                            <Link
+                                                href={`/admin/logs?q=${encodeURIComponent(user.participantCode ?? user.email)}`}
+                                                className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#663820] hover:underline"
+                                            >
+                                                <ScrollText className="size-4" /> Ver sesiones y logs de este participante
+                                            </Link>
                                             <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                                                 {user.stages.map((stage) => {
                                                     const config = statusConfig[stage.status];

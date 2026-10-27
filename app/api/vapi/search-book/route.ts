@@ -3,6 +3,7 @@ import { NextResponse, after } from 'next/server';
 import { searchBookSegments } from '@/lib/actions/book.actions';
 import { RETRIEVER_TOP_K } from '@/lib/constants';
 import { recordTurnRetrievals, resolveSearchCallContext } from '@/lib/retrievals';
+import { describeError, writeSystemLog } from '@/lib/system-logs/write.server';
 
 // Normalize an optional string argument coming from the Vapi tool call.
 // `sessionId` is optional on purpose: the tool schema in the Vapi dashboard may
@@ -64,7 +65,61 @@ async function processBookSearch(bookId: unknown, query: unknown, sessionId: unk
     // Execute search. `searchBookSegments` already drops anything past the
     // relevance threshold, so an empty result means the document does not cover
     // the topic -- not that the search failed.
+    const searchStartedAt = Date.now();
     const searchResult = await searchBookSegments(bookIdStr, queryStr, RETRIEVER_TOP_K);
+    const searchMs = Date.now() - searchStartedAt;
+    const sessionIdStr = optionalString(sessionId);
+
+    // System log, written after the response like the retrievals below.
+    const found = searchResult.success ? searchResult.data?.length ?? 0 : 0;
+    const distances = (searchResult.data ?? []).map((segment) => Number(segment.distance));
+    after(writeSystemLog(
+        !searchResult.success
+            ? {
+                level: 'error',
+                source: 'webhook',
+                event: 'retriever.search',
+                message: `La búsqueda falló: ${searchResult.error ?? 'error desconocido'}`,
+                sessionId: sessionIdStr,
+                durationMs: searchMs,
+                metadata: { bookId: bookIdStr, query: queryStr },
+            }
+            : found === 0
+                ? {
+                    level: 'warn',
+                    source: 'webhook',
+                    event: 'retriever.no_results',
+                    message: `Sin fragmentos relevantes para «${queryStr}».`,
+                    sessionId: sessionIdStr,
+                    durationMs: searchMs,
+                    metadata: { bookId: bookIdStr, query: queryStr, topK: RETRIEVER_TOP_K },
+                }
+                : {
+                    level: 'info',
+                    source: 'webhook',
+                    event: 'retriever.search',
+                    message: `${found} fragmento(s) para «${queryStr}».`,
+                    sessionId: sessionIdStr,
+                    durationMs: searchMs,
+                    metadata: {
+                        bookId: bookIdStr,
+                        query: queryStr,
+                        topK: RETRIEVER_TOP_K,
+                        results: found,
+                        bestDistance: Math.min(...distances),
+                        worstDistance: Math.max(...distances),
+                    },
+                },
+    ));
+    if (!sessionIdStr) {
+        after(writeSystemLog({
+            level: 'warn',
+            source: 'webhook',
+            event: 'retriever.unlinked',
+            message: 'La búsqueda no se pudo asociar a una sesión: sus fragmentos no quedan registrados.',
+            metadata: { bookId: bookIdStr, query: queryStr },
+        }));
+    }
 
     // Return results. This message is in Spanish because the LLM reads it and
     // the agent speaks Spanish: it has to say it out loud to the student.
@@ -93,7 +148,6 @@ async function processBookSearch(bookId: unknown, query: unknown, sessionId: unk
         .join('\n\n');
 
     // Persist the evidence AFTER the response is built: Vapi must be answered fast.
-    const sessionIdStr = optionalString(sessionId);
     if (sessionIdStr) {
         after(
             recordTurnRetrievals(
@@ -173,6 +227,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ results });
     } catch (error) {
         console.error('Vapi search-book error:', error);
+        after(writeSystemLog({
+            level: 'error',
+            source: 'webhook',
+            event: 'webhook.error',
+            message: describeError(error),
+        }));
         return NextResponse.json({
             results: [{ result: 'Error processing request' }],
         });
