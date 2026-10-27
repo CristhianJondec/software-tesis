@@ -22,6 +22,7 @@ import {
     type SurveyProgressStage,
 } from '@/lib/surveys/progress';
 import { computeSurveyScore, validateSurveyAnswers } from '@/lib/surveys/scoring';
+import { parseExportOptions, selectExportUsers } from '@/lib/thesis-export/options';
 
 export type { SurveyProgressStage, SurveyStageStatus } from '@/lib/surveys/progress';
 
@@ -265,7 +266,8 @@ function csvCell(value: string | number | null): string {
     return `"${text.replaceAll('"', '""')}"`;
 }
 
-export async function exportSurveySummaryCsv(): Promise<{
+/** Survey summary (.csv) for the participants the export modal selected (lib/thesis-export/options.ts). */
+export async function exportSurveySummaryCsv(rawOptions?: unknown): Promise<{
     success: boolean;
     data?: { filename: string; content: string };
     error?: string;
@@ -273,16 +275,19 @@ export async function exportSurveySummaryCsv(): Promise<{
     const overview = await getAdminSurveyOverview();
     if (!overview.success || !overview.data) return { success: false, error: overview.error };
 
+    const options = parseExportOptions(rawOptions);
+    const selected = selectExportUsers(overview.data, options);
+    if (selected.length === 0) return { success: false, error: 'Ningún participante cumple las opciones elegidas.' };
+
     const headers = [
-        'user_id', 'codigo_participante', 'nombre', 'email', 'grupo',
+        'user_id', 'codigo_participante', ...(options.anonymize ? [] : ['nombre', 'email']), 'grupo',
         'AE_T1', 'AE_T2', 'DIF_AE_T2_T1', 'AC_T1', 'AC_T2', 'DIF_AC_T2_T1', 'SUS',
         ...SURVEY_STAGES.map((stage) => `fecha_${stage.id.replaceAll('-', '_')}`),
     ];
-    const rows = overview.data.map((user) => [
+    const rows = selected.map((user) => [
         user.id,
         user.participantCode,
-        user.name,
-        user.email,
+        ...(options.anonymize ? [] : [user.name, user.email]),
         user.studyGroup,
         user.scores.aeT1,
         user.scores.aeT2,

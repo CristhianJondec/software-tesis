@@ -72,6 +72,10 @@ export interface ThesisExportInput {
     globalLimitMinutes: number | null;
     metricsInput: MetricsInput;
     report: MetricsReport;
+    /** Drops the name and email columns (export modal). */
+    anonymize?: boolean;
+    /** Includes the `turnos` sheet with the transcript (export modal). Default true. */
+    includeTurns?: boolean;
 }
 
 const STATUS_LABELS: Record<SurveyStageStatus, string> = {
@@ -99,9 +103,17 @@ function rawItems(response: ExportResponse | undefined, count: number): CellValu
 }
 
 const IDENTITY_HEADERS = ['usuario_id', 'codigo_participante', 'nombre', 'email', 'grupo'] as const;
+const ANONYMOUS_IDENTITY_HEADERS = ['usuario_id', 'codigo_participante', 'grupo'] as const;
 
-function identity(user: ExportUser): CellValue[] {
-    return [user.id, user.participantCode, user.name, user.email, normalizeStudyGroup(user.studyGroup)];
+function identityHeaders(input: ThesisExportInput): readonly string[] {
+    return input.anonymize ? ANONYMOUS_IDENTITY_HEADERS : IDENTITY_HEADERS;
+}
+
+function identity(user: ExportUser, input: ThesisExportInput): CellValue[] {
+    const group = normalizeStudyGroup(user.studyGroup);
+    return input.anonymize
+        ? [user.id, user.participantCode, group]
+        : [user.id, user.participantCode, user.name, user.email, group];
 }
 
 interface UserSurveys {
@@ -120,7 +132,7 @@ function surveysOf(user: ExportUser, input: ThesisExportInput, byUser: Map<strin
 
 function measurementsSheet(input: ThesisExportInput, byUser: Map<string, ExportResponse[]>): ExportSheet {
     const headers = [
-        ...IDENTITY_HEADERS,
+        ...identityHeaders(input),
         'fecha_registro',
         'consentimiento',
         'momento',
@@ -147,7 +159,7 @@ function measurementsSheet(input: ThesisExportInput, byUser: Map<string, ExportR
             };
 
             return [
-                ...identity(user),
+                ...identity(user, input),
                 user.createdAt,
                 // The platform does not record consent; left empty on purpose.
                 null,
@@ -169,13 +181,13 @@ function measurementsSheet(input: ThesisExportInput, byUser: Map<string, ExportR
 }
 
 function susSheet(input: ThesisExportInput, byUser: Map<string, ExportResponse[]>): ExportSheet {
-    const headers = [...IDENTITY_HEADERS, 'estado_sus', 'fecha_sus', 'sus_puntaje', ...itemHeaders('sus', SUS_ITEMS)];
+    const headers = [...identityHeaders(input), 'estado_sus', 'fecha_sus', 'sus_puntaje', ...itemHeaders('sus', SUS_ITEMS)];
     const rows = input.users.map((user) => {
         const surveys = surveysOf(user, input, byUser);
         const sus = surveys.find('SUS', 'UNICA');
         const stage = surveys.stage('SUS', 'UNICA');
         return [
-            ...identity(user),
+            ...identity(user, input),
             stage ? STATUS_LABELS[stage.status] : null,
             sus?.submittedAt,
             sus?.computedScore,
@@ -194,7 +206,7 @@ function usageSheet(input: ThesisExportInput): ExportSheet {
     }
 
     const headers = [
-        ...IDENTITY_HEADERS,
+        ...identityHeaders(input),
         'investigaciones_subidas',
         'sesiones_voz',
         'turnos_estudiante',
@@ -208,7 +220,7 @@ function usageSheet(input: ThesisExportInput): ExportSheet {
     const rows = input.users.map((user) => {
         const usage = usageByUser.get(user.id);
         return [
-            ...identity(user),
+            ...identity(user, input),
             usage?.researchUploads ?? 0,
             usage?.sessions ?? 0,
             studentTurnsByUser.get(user.id) ?? 0,
@@ -273,7 +285,7 @@ const DICTIONARY: readonly (readonly [string, string, string])[] = [
     ['general', 'celdas vacías', 'Dato faltante o pendiente. Nunca equivale a 0. Las fechas están en UTC.'],
     ['general', 'usuario_id', 'Identificador interno estable de la cuenta. Sirve para unir todas las hojas.'],
     ['general', 'codigo_participante', 'Código asignado para desidentificar; vacío si no se asignó.'],
-    ['general', 'nombre, email', 'Datos identificatorios de la cuenta. Eliminar antes del análisis.'],
+    ['general', 'nombre, email', 'Datos identificatorios de la cuenta. Eliminar antes del análisis; no aparecen si se exportó con «Anonimizar».'],
     ['general', 'grupo', 'experimental | control | vacío (sin asignar, sin acceso).'],
     ['mediciones_O1_O2', 'fila', 'Una fila por estudiante y momento: O1 (pretest, fase T1) y O2 (postest, fase T2).'],
     ['mediciones_O1_O2', 'fecha_registro', 'Fecha de creación de la cuenta.'],
@@ -325,7 +337,9 @@ export function buildThesisSheets(input: ThesisExportInput): ExportSheet[] {
         materialsSheet(input),
         fromMetricsTable('sesiones', buildSessionsTable(input.report)),
         fromMetricsTable('metricas_participantes', buildParticipantsTable(input.report)),
-        fromMetricsTable('turnos', buildTurnsTable(input.metricsInput, input.report)),
+        ...(input.includeTurns === false
+            ? []
+            : [fromMetricsTable('turnos', buildTurnsTable(input.metricsInput, input.report))]),
         globalMetricsSheet(input.report),
         { name: 'diccionario', headers: ['hoja', 'columna', 'descripcion'], rows: DICTIONARY.map((row) => [...row]) },
     ];

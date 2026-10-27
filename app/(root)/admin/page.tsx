@@ -1,11 +1,10 @@
 import Link from 'next/link';
 import { Check, Circle, Clock3, LockKeyhole, Minus, ScrollText, ShieldCheck, UsersRound } from 'lucide-react';
 
-import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
 import ParticipantCodeInput from '@/components/admin/ParticipantCodeInput';
 import { ImpersonateButton } from '@/components/admin/ImpersonateButton';
 import AdminFilters from '@/components/admin/AdminFilters';
-import ExportThesisXlsxButton from '@/components/admin/ExportThesisXlsxButton';
+import ExportDialog from '@/components/admin/ExportDialog';
 import MaterialsManager from '@/components/admin/MaterialsManager';
 import PaginationNav from '@/components/admin/PaginationNav';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
@@ -194,8 +193,15 @@ export default async function AdminPage({
                     >
                         <ScrollText className="size-4" /> Logs del sistema
                     </Link>
-                    <ExportThesisXlsxButton />
-                    <ExportSurveyCsvButton />
+                    <ExportDialog
+                        participants={users.map((user) => ({
+                            name: user.name,
+                            email: user.email,
+                            participantCode: user.participantCode,
+                            studyGroup: user.studyGroup,
+                            stages: user.stages,
+                        }))}
+                    />
                 </div>
             </header>
 

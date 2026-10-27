@@ -18,6 +18,8 @@ import {
 import { RAGAS_PROMPT_VERSION } from '@/lib/metrics/ragas';
 import { buildMetricsReport, type MetricsInput } from '@/lib/metrics/report';
 import { readGlobalVoiceLimit } from '@/lib/study/usage.server';
+import { buildSurveyProgress } from '@/lib/surveys/progress';
+import { parseExportOptions, selectExportUsers } from '@/lib/thesis-export/options';
 import { buildThesisSheets, type ExportSheet } from '@/lib/thesis-export/sheets';
 
 // Excel rejects cells longer than this; only a very long transcript turn could hit it.
@@ -33,6 +35,22 @@ async function loadMetricsInput(): Promise<MetricsInput> {
         fetchTurnFeedback(FEEDBACK_PROMPT_VERSION),
     ]);
     return { turns, sessions, retrievals, evaluations, ragasRows, feedbackRows };
+}
+
+/** Keeps only the rows of the selected participants, so every sheet and metric agrees with them. */
+function restrictMetricsInput(input: MetricsInput, userIds: Set<string>): MetricsInput {
+    const sessions = input.sessions.filter((row) => userIds.has(row.userId));
+    const turns = input.turns.filter((row) => userIds.has(row.userId));
+    const sessionIds = new Set(sessions.map((row) => row.sessionId));
+    const turnIds = new Set(turns.map((row) => row.turnId));
+    return {
+        sessions,
+        turns,
+        retrievals: input.retrievals.filter((row) => row.sessionId !== null && sessionIds.has(row.sessionId)),
+        evaluations: input.evaluations.filter((row) => turnIds.has(row.turnId)),
+        ragasRows: input.ragasRows.filter((row) => turnIds.has(row.turnId)),
+        feedbackRows: input.feedbackRows.filter((row) => turnIds.has(row.turnId)),
+    };
 }
 
 function addSheet(workbook: ExcelJS.Workbook, sheet: ExportSheet) {
@@ -70,16 +88,18 @@ function addSheet(workbook: ExcelJS.Workbook, sheet: ExportSheet) {
 }
 
 /**
- * Builds the thesis workbook (.xlsx) from everything the platform stored.
+ * Builds the thesis workbook (.xlsx) from everything the platform stored, for
+ * the participants the export modal selected (lib/thesis-export/options.ts).
  * Works at any point of the study: whatever is missing goes out as empty cells.
  */
-export async function exportThesisWorkbook(): Promise<{
+export async function exportThesisWorkbook(rawOptions?: unknown): Promise<{
     success: boolean;
     data?: { filename: string; base64: string };
     error?: string;
 }> {
     try {
         await requireAdmin();
+        const options = parseExportOptions(rawOptions);
 
         const [allUsers, responses, sessionUsage, uploads, conversations, materials, globalLimitMinutes, metricsInput] =
             await Promise.all([
@@ -123,9 +143,28 @@ export async function exportThesisWorkbook(): Promise<{
                 loadMetricsInput(),
             ]);
 
+        const usersWithConversation = new Set(conversations.map((row) => row.userId));
+        const responsesByUser = new Map<string, typeof responses>();
+        for (const response of responses) {
+            responsesByUser.set(response.userId, [...(responsesByUser.get(response.userId) ?? []), response]);
+        }
+        const selectedUsers = selectExportUsers(
+            allUsers.map((user) => ({
+                ...user,
+                stages: buildSurveyProgress(user.studyGroup, responsesByUser.get(user.id) ?? [], usersWithConversation.has(user.id)),
+            })),
+            options,
+        );
+        if (selectedUsers.length === 0) {
+            return { success: false, error: 'Ningún participante cumple las opciones elegidas.' };
+        }
+        const selectedIds = new Set(selectedUsers.map((user) => user.id));
+        const exportedUsers = allUsers.filter((user) => selectedIds.has(user.id));
+        const exportedMetrics = restrictMetricsInput(metricsInput, selectedIds);
+
         const uploadsByUser = new Map(uploads.map((row) => [row.userId, row.uploads]));
         const sessionsByUser = new Map(sessionUsage.map((row) => [row.userId, row]));
-        const usage = allUsers.map((user) => {
+        const usage = exportedUsers.map((user) => {
             const sessions = sessionsByUser.get(user.id);
             return {
                 userId: user.id,
@@ -138,14 +177,16 @@ export async function exportThesisWorkbook(): Promise<{
         });
 
         const sheets = buildThesisSheets({
-            users: allUsers,
-            responses,
+            users: exportedUsers,
+            responses: responses.filter((row) => selectedIds.has(row.userId)),
             usage,
-            usersWithConversation: new Set(conversations.map((row) => row.userId)),
+            usersWithConversation,
             materials,
             globalLimitMinutes,
-            metricsInput,
-            report: buildMetricsReport(metricsInput),
+            metricsInput: exportedMetrics,
+            report: buildMetricsReport(exportedMetrics),
+            anonymize: options.anonymize,
+            includeTurns: options.includeTurns,
         });
 
         const workbook = new ExcelJS.Workbook();
