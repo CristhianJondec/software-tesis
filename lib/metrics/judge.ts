@@ -17,8 +17,10 @@ import { GoogleGenAI } from '@google/genai';
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // Pinned in the thesis alongside the scores: a different judge model is a
-// different measurement instrument.
-export const JUDGE_MODEL = process.env.GEMINI_JUDGE_MODEL ?? 'gemini-2.5-flash';
+// different measurement instrument. gemini-2.5-flash was retired for new
+// accounts (404); gemini-3.8-flash accepts the same config (temperature 0,
+// JSON mime type, thinkingBudget 0), checked on 2026-10-26.
+export const JUDGE_MODEL = process.env.GEMINI_JUDGE_MODEL ?? 'gemini-3.8-flash';
 
 export type JudgeFn = (prompt: string) => Promise<unknown>;
 
