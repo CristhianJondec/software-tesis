@@ -62,16 +62,22 @@ export const setParticipantCode = async (
         const trimmed = code.trim().toUpperCase();
         if (trimmed.length > 32) return { success: false, error: 'El código es demasiado largo.' };
 
-        await db
+        const updated = await db
             .update(users)
             .set({ participantCode: trimmed || null, updatedAt: new Date() })
-            .where(eq(users.id, userId));
+            .where(eq(users.id, userId))
+            .returning({ id: users.id });
+
+        if (updated.length === 0) return { success: false, error: 'El participante no existe.' };
 
         revalidatePath('/admin');
         return { success: true };
     } catch (error) {
         console.error('Error setting participant code', error);
-        const duplicated = error instanceof Error && error.message.includes('unique');
+        // Drizzle wraps the driver error; the unique violation (23505) is on `cause`.
+        const cause = (error as { cause?: { code?: string } } | null)?.cause;
+        const duplicated = cause?.code === '23505'
+            || (error instanceof Error && /unique|duplicate/i.test(error.message));
         return {
             success: false,
             error: duplicated ? 'Ese código ya está asignado a otro participante.' : 'No se pudo guardar el código.',

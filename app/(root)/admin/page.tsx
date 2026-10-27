@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Check, Circle, Clock3, LockKeyhole, Minus, ScrollText, ShieldCheck, UsersRound } from 'lucide-react';
 
 import ExportSurveyCsvButton from '@/components/admin/ExportSurveyCsvButton';
+import ParticipantCodeInput from '@/components/admin/ParticipantCodeInput';
 import { ImpersonateButton } from '@/components/admin/ImpersonateButton';
 import AdminFilters from '@/components/admin/AdminFilters';
 import ExportThesisXlsxButton from '@/components/admin/ExportThesisXlsxButton';
@@ -222,8 +223,12 @@ export default async function AdminPage({
                                         <li key={user.id} className="grid gap-4 p-4 sm:p-5">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
-                                                    <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
+                                                    <p className="font-semibold">{user.name}</p>
                                                     <p className="truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                                    <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+                                                        Código
+                                                        <ParticipantCodeInput userId={user.id} value={user.participantCode} participantLabel={user.name} />
+                                                    </label>
                                                 </div>
                                                 {user.id !== access.userId && (
                                                     <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
@@ -304,8 +309,12 @@ export default async function AdminPage({
                                             {filteredUsers.map((user) => (
                                                 <tr key={user.id} className="border-t border-black/5 align-top">
                                                     <td className="px-4 py-3">
-                                                        <p className="font-semibold">{user.participantCode ?? 'Sin código'} · {user.name}</p>
+                                                        <p className="font-semibold">{user.name}</p>
                                                         <p className="max-w-56 truncate text-xs text-[var(--text-secondary)]">{user.email}</p>
+                                                        <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+                                                            Código
+                                                            <ParticipantCodeInput userId={user.id} value={user.participantCode} participantLabel={user.name} />
+                                                        </label>
                                                         {user.id !== access.userId && (
                                                             <div className="mt-2">
                                                                 <ImpersonateButton userId={user.id} label={user.participantCode ?? user.name} />
