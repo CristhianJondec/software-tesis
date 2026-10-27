@@ -9,7 +9,7 @@ import { BookUploadFormValues } from '@/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, MAX_BOOKS_PER_USER, DEFAULT_VOICE } from '@/lib/constants';
+import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES, DEFAULT_VOICE } from '@/lib/constants';
 import FileUploader from './FileUploader';
 import VoiceSelector from './VoiceSelector';
 import LoadingOverlay from './LoadingOverlay';
@@ -125,7 +125,7 @@ const UploadForm = () => {
 
             if(!book.success) {
                 if (book.error === 'limit_reached') {
-                    toast.error(`Alcanzaste tu límite de ${MAX_BOOKS_PER_USER} investigaciones.`);
+                    toast.error("Ya usaste todas las subidas de investigación disponibles para tu cuenta.");
                 } else {
                     toast.error(book.error as string || "Error al crear la investigación");
                 }
@@ -142,8 +142,9 @@ const UploadForm = () => {
             const segments = await saveBookSegments(book.data!.id, parsedPDF.content);
 
             if(!segments.success) {
-                toast.error("Error al guardar los segmentos de la investigación");
-                throw new Error("Failed to save book segments");
+                // The server already removed the empty thesis and logged the cause.
+                toast.error(segments.error || "No se pudo procesar tu investigación.");
+                return;
             }
 
             form.reset();

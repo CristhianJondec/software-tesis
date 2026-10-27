@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
-import { MAX_BOOKS_PER_USER } from '@/lib/constants';
 
-const LimitReachedModal = () => {
+const LimitReachedModal = ({ limit }: { limit: number }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
@@ -13,8 +12,10 @@ const LimitReachedModal = () => {
                     Alcanzaste tu límite de investigaciones
                 </h2>
                 <p className="text-[#3d485e] mb-6">
-                    Puedes tener hasta {MAX_BOOKS_PER_USER} investigaciones a la vez. Elimina una
-                    existente desde el inicio para poder subir una nueva.
+                    {limit === 0
+                        ? 'Tu cuenta no tiene subidas de investigación disponibles.'
+                        : `Ya usaste ${limit === 1 ? 'tu subida disponible' : `tus ${limit} subidas disponibles`}.`}{' '}
+                    Si necesitas subir o reemplazar tu documento, pídeselo al equipo de investigación.
                 </p>
                 <Link href="/" className="form-btn inline-flex items-center justify-center">
                     Volver al inicio

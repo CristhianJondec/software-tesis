@@ -50,6 +50,13 @@ export const LOG_EVENTS = {
     'webhook.error': 'Error del webhook',
     // Post-session report
     'feedback.evaluated': 'Juez del informe ejecutado',
+    // Thesis upload
+    'upload.completed': 'Investigación subida',
+    'upload.failed': 'Falló la subida de una investigación',
+    'upload.limit_reached': 'Límite de investigaciones alcanzado',
+    // Catch-all: any console.error on the server, any uncaught error in the browser
+    'server.error': 'Error del servidor',
+    'client.error': 'Error en el navegador',
     // Admin
     'admin.impersonation_started': 'El admin entró como el participante',
     'admin.impersonation_ended': 'El admin salió de la cuenta del participante',
@@ -67,6 +74,7 @@ export const CLIENT_LOG_EVENTS = [
     'session.limit_reached',
     'session.wrap_up_sent',
     'turn.save_failed',
+    'client.error',
 ] as const satisfies readonly LogEvent[];
 
 export function isLogLevel(value: unknown): value is LogLevel {

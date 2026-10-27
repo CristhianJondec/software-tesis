@@ -9,6 +9,7 @@ import {checkAdminAccess} from "@/lib/admin/access";
 import {getStudyContext} from "@/lib/study/access";
 import {getImpersonation} from "@/lib/session";
 import {ImpersonationBanner} from "@/components/admin/ImpersonateButton";
+import ClientErrorReporter from "@/components/ClientErrorReporter";
 
 const ibmPlexSerif = IBM_Plex_Serif({
     variable: "--font-ibm-plex-serif",
@@ -64,6 +65,7 @@ export default async function RootLayout({
         />
         {children}
         <Toaster />
+        <ClientErrorReporter />
       </body>
     </html>
   );

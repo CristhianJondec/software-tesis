@@ -20,10 +20,9 @@ export const SESSION_WRAP_UP_MINUTES_BEFORE_END = 3;
 // acts as a backstop. Without it, the dashboard value (10 min by default) rules.
 export const VAPI_MAX_DURATION_BUFFER_SECONDS = 30;
 
-// Maximum number of investigaciones (books) a single user can have at once.
-// Independent of the legacy subscription/billing scaffolding — do not read
-// PLAN_LIMITS.maxBooks for this.
-export const MAX_BOOKS_PER_USER = 4;
+// The cap on thesis uploads per account lives in lib/study/uploads.ts (set by
+// the admin from /admin). Independent of the legacy subscription/billing
+// scaffolding — do not read PLAN_LIMITS.maxBooks for this.
 
 // Pre-configured VAPI assistant ID (hardcoded for this app)
 export const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID!;

@@ -10,6 +10,8 @@ import { normalizeStudyGroup } from '@/lib/study/groups';
 import { GLOBAL_VOICE_LIMIT_KEY, parseVoiceLimitInput } from '@/lib/study/usage';
 import { readGlobalVoiceLimit } from '@/lib/study/usage.server';
 import { readThesisUploadEnabled, THESIS_UPLOAD_ENABLED_KEY } from '@/lib/study/upload.server';
+import { GLOBAL_THESIS_UPLOAD_LIMIT_KEY, parseThesisUploadLimitInput } from '@/lib/study/uploads';
+import { readGlobalThesisUploadLimit } from '@/lib/study/uploads.server';
 
 /**
  * Assigns a participant to an arm of the experiment.
@@ -180,6 +182,101 @@ export const setUserVoiceLimit = async (
         return { success: true };
     } catch (error) {
         console.error('Error setting user voice limit', error);
+        return { success: false, error: 'No se pudo guardar el límite del participante.' };
+    }
+};
+
+// ============================================================================
+// Thesis upload caps (rules in lib/study/uploads.ts)
+// ============================================================================
+
+export interface ThesisUploadOverview {
+    /** Global cap. Null = not set, the default applies. */
+    globalLimit: number | null;
+    /** Per account: personal cap (null = uses the global) and successful uploads. */
+    users: Record<string, { personalLimit: number | null; used: number }>;
+}
+
+export const getThesisUploadOverview = async (): Promise<{
+    success: boolean;
+    data?: ThesisUploadOverview;
+    error?: string;
+}> => {
+    try {
+        await requireAdmin();
+
+        const [globalLimit, rows] = await Promise.all([
+            readGlobalThesisUploadLimit(),
+            db
+                .select({ id: users.id, limit: users.thesisUploadLimit, used: users.thesisUploads })
+                .from(users),
+        ]);
+
+        const overview: ThesisUploadOverview['users'] = {};
+        for (const row of rows) overview[row.id] = { personalLimit: row.limit, used: row.used };
+
+        return { success: true, data: { globalLimit, users: overview } };
+    } catch (error) {
+        console.error('Error loading thesis uploads', error);
+        return { success: false, error: 'No se pudo cargar el límite de investigaciones.' };
+    }
+};
+
+/** Sets the global upload cap. Empty = back to the default. */
+export const setGlobalThesisUploadLimit = async (
+    limit: string | number | null,
+): Promise<{ success: boolean; error?: string }> => {
+    try {
+        await requireAdmin();
+
+        const parsed = parseThesisUploadLimitInput(limit);
+        if (parsed === undefined) return { success: false, error: 'Indica un número entero de investigaciones.' };
+
+        if (parsed === null) {
+            await db.delete(appSettings).where(eq(appSettings.key, GLOBAL_THESIS_UPLOAD_LIMIT_KEY));
+        } else {
+            await db
+                .insert(appSettings)
+                .values({ key: GLOBAL_THESIS_UPLOAD_LIMIT_KEY, value: String(parsed), updatedAt: new Date() })
+                .onConflictDoUpdate({
+                    target: appSettings.key,
+                    set: { value: String(parsed), updatedAt: new Date() },
+                });
+        }
+
+        revalidatePath('/admin');
+        revalidatePath('/books/new');
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting global thesis upload limit', error);
+        return { success: false, error: 'No se pudo guardar el límite general.' };
+    }
+};
+
+/** Sets a personal upload cap that overrides the global one. Empty = back to the global. */
+export const setUserThesisUploadLimit = async (
+    userId: string,
+    limit: string | number | null,
+): Promise<{ success: boolean; error?: string }> => {
+    try {
+        await requireAdmin();
+
+        if (!userId?.trim()) return { success: false, error: 'Falta el participante.' };
+        const parsed = parseThesisUploadLimitInput(limit);
+        if (parsed === undefined) return { success: false, error: 'Indica un número entero de investigaciones.' };
+
+        const updated = await db
+            .update(users)
+            .set({ thesisUploadLimit: parsed, updatedAt: new Date() })
+            .where(eq(users.id, userId))
+            .returning({ id: users.id });
+
+        if (updated.length === 0) return { success: false, error: 'El participante no existe.' };
+
+        revalidatePath('/admin');
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting user thesis upload limit', error);
         return { success: false, error: 'No se pudo guardar el límite del participante.' };
     }
 };

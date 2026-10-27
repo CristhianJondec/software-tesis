@@ -10,13 +10,14 @@ import MaterialsManager from '@/components/admin/MaterialsManager';
 import StudyGroupSelect from '@/components/admin/StudyGroupSelect';
 import VoiceLimitInput from '@/components/admin/VoiceLimitInput';
 import ThesisUploadToggle from '@/components/admin/ThesisUploadToggle';
-import { getThesisUploadEnabled, getVoiceUsageOverview } from '@/lib/actions/study.actions';
+import { getThesisUploadEnabled, getThesisUploadOverview, getVoiceUsageOverview } from '@/lib/actions/study.actions';
 import { checkAdminAccess } from '@/lib/admin/access';
 import { filterAdminUsers, parseAdminFilters } from '@/lib/admin/filters';
 import { listStudyMaterialsForAdmin } from '@/lib/actions/material.actions';
 import { getAdminSurveyOverview, type SurveyStageStatus } from '@/lib/actions/survey.actions';
 import { formatDateTime } from '@/lib/metrics/format';
 import { normalizeStudyGroup } from '@/lib/study/groups';
+import { DEFAULT_THESIS_UPLOAD_LIMIT } from '@/lib/study/uploads';
 import { SURVEY_INSTRUMENTS } from '@/lib/surveys/catalog';
 import { cn } from '@/lib/utils';
 
@@ -56,11 +57,12 @@ export default async function AdminPage({
         );
     }
 
-    const [result, materialsResult, usageResult, uploadFlagResult] = await Promise.all([
+    const [result, materialsResult, usageResult, uploadFlagResult, uploadsResult] = await Promise.all([
         getAdminSurveyOverview(),
         listStudyMaterialsForAdmin(),
         getVoiceUsageOverview(),
         getThesisUploadEnabled(),
+        getThesisUploadOverview(),
     ]);
     if (!result.success || !result.data) {
         return (
@@ -77,6 +79,9 @@ export default async function AdminPage({
     const materials = materialsResult.success ? materialsResult.data ?? [] : [];
     const usage = usageResult.success ? usageResult.data : undefined;
     const globalLimit = usage?.globalLimitMinutes ?? null;
+    const uploads = uploadsResult.success ? uploadsResult.data : undefined;
+    const globalUploadLimit = uploads?.globalLimit ?? null;
+    const effectiveGlobalUploadLimit = globalUploadLimit ?? DEFAULT_THESIS_UPLOAD_LIMIT;
     const unassignedCount = users.filter((user) => normalizeStudyGroup(user.studyGroup) === null).length;
     const completedUsers = users.filter((user) =>
         user.stages.filter((stage) => stage.status !== 'not_applicable').every((stage) => stage.status === 'completed'),
@@ -183,6 +188,33 @@ export default async function AdminPage({
 
             <section className="mb-10">
                 <div className="mb-4">
+                    <h2 className="font-serif text-2xl font-bold">Límite de investigaciones</h2>
+                    <p className="subtitle mt-2 max-w-3xl">
+                        Cuántas investigaciones puede subir cada cuenta en todo el estudio. Cuentan solo las subidas
+                        exitosas y <strong>borrar una no devuelve el cupo</strong>. Todos parten con el{' '}
+                        <strong>límite general</strong>; el <strong>límite personal</strong> (columna «Investigaciones»
+                        de la tabla) tiene prioridad. Si dejas vacío el general, se usa {DEFAULT_THESIS_UPLOAD_LIMIT}.
+                    </p>
+                </div>
+                {!uploadsResult.success && <p className="mb-3 text-sm text-red-700">{uploadsResult.error}</p>}
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+                    <span className="text-sm font-semibold">Límite general (investigaciones)</span>
+                    <VoiceLimitInput
+                        kind="uploads"
+                        value={globalUploadLimit}
+                        placeholder={String(DEFAULT_THESIS_UPLOAD_LIMIT)}
+                        label="Límite general de investigaciones"
+                    />
+                    <span className="text-sm text-[var(--text-secondary)]">
+                        Actualmente {effectiveGlobalUploadLimit}{' '}
+                        {effectiveGlobalUploadLimit === 1 ? 'investigación' : 'investigaciones'} por cuenta
+                        {globalUploadLimit === null ? ' (valor por defecto)' : ''}.
+                    </span>
+                </div>
+            </section>
+
+            <section className="mb-10">
+                <div className="mb-4">
                     <h2 className="font-serif text-2xl font-bold">Materiales compartidos</h2>
                     <p className="subtitle mt-2 max-w-3xl">
                         Documentos PDF que acompañan a la guía escrita en la vista <strong>Materiales</strong> para el
@@ -257,6 +289,21 @@ export default async function AdminPage({
                                                         </span>
                                                     </div>
                                                 </div>
+                                                <div className="grid gap-1">
+                                                    <span className="text-xs font-semibold text-[var(--text-secondary)]">Investigaciones</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <VoiceLimitInput
+                                                            kind="uploads"
+                                                            userId={user.id}
+                                                            value={uploads?.users[user.id]?.personalLimit ?? null}
+                                                            placeholder={String(effectiveGlobalUploadLimit)}
+                                                            label={`Investigaciones de ${user.participantCode ?? user.name}`}
+                                                        />
+                                                        <span className="text-xs text-[var(--text-secondary)]">
+                                                            Subidas: {uploads?.users[user.id]?.used ?? 0}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <dl className="grid grid-cols-4 gap-2 rounded-lg bg-[#fff6e5] p-3 text-center text-sm sm:grid-cols-7">
                                                 {[
@@ -295,6 +342,7 @@ export default async function AdminPage({
                                                 <th className="px-4 py-3">Participante</th>
                                                 <th className="w-40 px-4 py-3">Grupo</th>
                                                 <th className="px-4 py-3">Límite agente (min)</th>
+                                                <th className="px-4 py-3">Investigaciones</th>
                                                 <th className="px-4 py-3 text-center">AE T1</th>
                                                 <th className="px-4 py-3 text-center">AE T2</th>
                                                 <th className="px-4 py-3 text-center">Δ AE</th>
@@ -337,6 +385,18 @@ export default async function AdminPage({
                                                         />
                                                         <p className="mt-1 whitespace-nowrap text-xs text-[var(--text-secondary)]">
                                                             Usados: {formatMinutes(usage?.users[user.id]?.usedSeconds ?? 0)}
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <VoiceLimitInput
+                                                            kind="uploads"
+                                                            userId={user.id}
+                                                            value={uploads?.users[user.id]?.personalLimit ?? null}
+                                                            placeholder={String(effectiveGlobalUploadLimit)}
+                                                            label={`Investigaciones de ${user.participantCode ?? user.name}`}
+                                                        />
+                                                        <p className="mt-1 whitespace-nowrap text-xs text-[var(--text-secondary)]">
+                                                            Subidas: {uploads?.users[user.id]?.used ?? 0}
                                                         </p>
                                                     </td>
                                                     <td className="px-4 py-3 text-center">{score(user.scores.aeT1)}</td>

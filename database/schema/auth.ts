@@ -12,6 +12,12 @@ export const users = pgTable('users', {
     // Personal cap on total voice-agent minutes for this account, set by the
     // admin. NULL = the global cap in `app_settings` applies (lib/study/usage.ts).
     voiceMinutesLimit: integer('voice_minutes_limit'),
+    // Personal cap on thesis uploads, set by the admin. NULL = the global cap
+    // in `app_settings` applies (lib/study/uploads.ts).
+    thesisUploadLimit: integer('thesis_upload_limit'),
+    // Successful thesis uploads so far. Deleting a thesis does not decrement
+    // it, so the cap counts uploads, not theses currently stored.
+    thesisUploads: integer('thesis_uploads').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

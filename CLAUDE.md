@@ -56,6 +56,8 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 | Vista de materiales del grupo control | `app/(root)/materiales/page.tsx`, `lib/materials/guide.ts` |
 | Exportación .xlsx «Exportar datos de tesis» (admin): hojas O₁/O₂, SUS, uso, sesiones, métricas y diccionario | `lib/thesis-export/sheets.ts`, `lib/actions/thesis-export.actions.ts`, `components/admin/ExportThesisXlsxButton.tsx` |
 | Logs del sistema (admin): catálogo cerrado de eventos, escritura que nunca lanza, vista general filtrable (`/admin/logs`) y vista por sesión con logs, transcripción e informe (`/admin/sesiones/[id]`) | `lib/system-logs/` (`catalog.ts`, `write.server.ts`, `filters.ts`), `lib/actions/system-log.actions.ts`, `components/admin/SystemLog*.tsx` |
+| Captura de errores hacia los logs: todo `console.error` del servidor (`server.error`, instalado desde `instrumentation.ts`) y errores no controlados del navegador (`client.error`) | `lib/system-logs/console-capture.ts`, `instrumentation.ts`, `components/ClientErrorReporter.tsx` |
+| Límite de subidas de investigación (general en `app_settings` + personal en `users`; cuentan las subidas exitosas, borrar no devuelve el cupo) | `lib/study/uploads.ts`, `lib/study/uploads.server.ts` |
 | Asignación de grupo y PDFs compartidos (admin) | `lib/actions/study.actions.ts`, `lib/actions/material.actions.ts`, `components/admin/` |
 
 ## Cómo funciona hoy el flujo de voz

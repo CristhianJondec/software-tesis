@@ -1,16 +1,18 @@
 'use server';
 
-import { and, count, cosineDistance, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, cosineDistance, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@/database/db';
-import { books, bookSegments } from '@/database/schema';
-import { MAX_BOOKS_PER_USER, RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
-import { generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
+import { books, bookSegments, users } from '@/database/schema';
+import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
+import { embeddingErrorStatus, generateEmbeddings, generateQueryEmbedding } from '@/lib/embeddings';
 import { getSession, requireUser } from '@/lib/session';
 import { requireInterventionAccess } from '@/lib/study/access';
 import { getThesisUploadBlock, THESIS_UPLOAD_BLOCK_MESSAGES } from '@/lib/study/upload.server';
+import { getThesisUploadAllowance, type ThesisUploadAllowance } from '@/lib/study/uploads.server';
+import { describeError, writeSystemLog } from '@/lib/system-logs/write.server';
 import { computeBookTopicCoverage } from '@/lib/preparation/compute';
 import { deleteObjects } from '@/lib/r2';
 import { generateSlug } from '@/lib/utils';
@@ -64,20 +66,23 @@ export const checkBookExists = async (title: string) => {
     }
 };
 
-export const getUserBookCount = async () => {
+/**
+ * Upload cap of the signed-in account (lib/study/uploads.ts). `null` for the
+ * researcher, who is never capped.
+ */
+export const getMyThesisUploadAllowance = async (): Promise<{
+    success: boolean;
+    data?: ThesisUploadAllowance | null;
+    error?: string;
+}> => {
     try {
-        const session = await getSession();
-        if (!session?.user) return { success: true, data: 0 };
-
-        const [row] = await db
-            .select({ value: count() })
-            .from(books)
-            .where(eq(books.userId, session.user.id));
-
-        return { success: true, data: row?.value ?? 0 };
+        const context = await requireInterventionAccess();
+        if (context.isResearcher) return { success: true, data: null };
+        const user = await requireUser();
+        return { success: true, data: await getThesisUploadAllowance(user.id) };
     } catch (e) {
-        console.error('Error counting books', e);
-        return { success: false, error: e, data: 0 };
+        console.error('Error reading thesis upload allowance', e);
+        return { success: false, error: 'No se pudo leer tu límite de investigaciones.' };
     }
 };
 
@@ -104,13 +109,21 @@ export const createBook = async (data: CreateBook) => {
             return { success: true, data: existing[0], alreadyExists: true };
         }
 
-        const [{ value: bookCount }] = await db
-            .select({ value: count() })
-            .from(books)
-            .where(eq(books.userId, userId));
-
-        if (bookCount >= MAX_BOOKS_PER_USER) {
-            return { success: false, error: 'limit_reached' };
+        // Counts successful uploads, not stored theses: deleting one does not
+        // give the slot back (lib/study/uploads.ts). The researcher is never capped.
+        if (!context.isResearcher) {
+            const allowance = await getThesisUploadAllowance(userId);
+            if (allowance.remaining <= 0) {
+                await writeSystemLog({
+                    level: 'warn',
+                    source: 'server',
+                    event: 'upload.limit_reached',
+                    message: `Intentó subir con el cupo agotado (${allowance.used} de ${allowance.limit}).`,
+                    userId,
+                    metadata: { limit: allowance.limit, used: allowance.used, source: allowance.source },
+                });
+                return { success: false, error: 'limit_reached', limit: allowance.limit };
+            }
         }
 
         const [book] = await db
@@ -192,21 +205,31 @@ export const deleteBook = async (bookId: string) => {
     }
 };
 
+const UPLOAD_ERROR_MESSAGES = {
+    quota: 'El servicio que procesa el documento está saturado. Espera un minuto y vuelve a intentarlo.',
+    generic: 'No se pudo procesar tu investigación. Vuelve a intentarlo en unos minutos.',
+};
+
 export const saveBookSegments = async (bookId: string, segments: TextSegment[]) => {
+    // Set once ownership is confirmed: from then on a failure removes the
+    // half-created thesis, so a retry with the same title starts clean.
+    let owned: { userId: string; title: string; fileBlobKey: string; coverBlobKey: string | null } | null = null;
+    const startedAt = Date.now();
     try {
         await requireInterventionAccess();
         const user = await requireUser();
         const userId = user.id;
 
-        const ownerCheck = await db
-            .select({ id: books.id })
+        const [ownedBook] = await db
+            .select({ title: books.title, fileBlobKey: books.fileBlobKey, coverBlobKey: books.coverBlobKey })
             .from(books)
             .where(and(eq(books.id, bookId), eq(books.userId, userId)))
             .limit(1);
 
-        if (ownerCheck.length === 0) {
+        if (!ownedBook) {
             return { success: false, error: 'Book not found or unauthorized' };
         }
+        owned = { userId, ...ownedBook };
 
         console.log(`Generating embeddings for ${segments.length} segments...`);
         const embeddings = await generateEmbeddings(segments.map((s) => s.text));
@@ -229,6 +252,22 @@ export const saveBookSegments = async (bookId: string, segments: TextSegment[]) 
                 .update(books)
                 .set({ totalSegments: segments.length, updatedAt: new Date() })
                 .where(eq(books.id, bookId));
+
+            // The upload only counts against the cap once it fully succeeded.
+            await tx
+                .update(users)
+                .set({ thesisUploads: sql`${users.thesisUploads} + 1` })
+                .where(eq(users.id, userId));
+        });
+
+        await writeSystemLog({
+            level: 'info',
+            source: 'server',
+            event: 'upload.completed',
+            message: `«${ownedBook.title}» procesada: ${segments.length} segmentos.`,
+            userId,
+            durationMs: Date.now() - startedAt,
+            metadata: { bookId, segments: segments.length },
         });
 
         // Map the document against the defense taxonomy right after ingestion, so
@@ -243,8 +282,37 @@ export const saveBookSegments = async (bookId: string, segments: TextSegment[]) 
 
         return { success: true, data: { segmentsCreated: segments.length } };
     } catch (e) {
-        console.error('Error saving book segments', e);
-        return { success: false, error: e instanceof Error ? e.message : String(e) };
+        const status = embeddingErrorStatus(e);
+        if (!owned) {
+            console.error('Error saving book segments', e);
+            return { success: false, error: UPLOAD_ERROR_MESSAGES.generic };
+        }
+
+        // Logged explicitly (with the participant) instead of console.error,
+        // which would add a second, anonymous `server.error` row.
+        console.warn('Error saving book segments', e);
+        await writeSystemLog({
+            level: 'error',
+            source: 'server',
+            event: 'upload.failed',
+            message: `No se pudo procesar «${owned.title}»: ${describeError(e)}`,
+            userId: owned.userId,
+            durationMs: Date.now() - startedAt,
+            metadata: { bookId, segments: segments.length, status },
+        });
+
+        // Nothing was stored for this thesis (the insert is transactional), so
+        // drop the empty row and its files; otherwise a retry with the same
+        // title would land on a thesis without segments.
+        try {
+            await db.delete(books).where(and(eq(books.id, bookId), eq(books.userId, owned.userId)));
+            await deleteObjects([owned.fileBlobKey, owned.coverBlobKey]);
+        } catch (cleanupError) {
+            console.error('Upload failed and the empty thesis could not be removed', cleanupError);
+        }
+
+        revalidatePath('/');
+        return { success: false, error: status === 429 ? UPLOAD_ERROR_MESSAGES.quota : UPLOAD_ERROR_MESSAGES.generic };
     }
 };
 

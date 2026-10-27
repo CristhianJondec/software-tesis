@@ -3,24 +3,45 @@
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
-import { setGlobalVoiceLimit, setUserVoiceLimit } from '@/lib/actions/study.actions';
+import {
+    setGlobalThesisUploadLimit,
+    setGlobalVoiceLimit,
+    setUserThesisUploadLimit,
+    setUserVoiceLimit,
+} from '@/lib/actions/study.actions';
+
+const KINDS = {
+    // Empty global = unlimited (lib/study/usage.ts).
+    voice: { setGlobal: setGlobalVoiceLimit, setUser: setUserVoiceLimit, unit: 'minutos', emptyGlobal: 'sin límite' },
+    // Empty global = the default cap (lib/study/uploads.ts).
+    uploads: {
+        setGlobal: setGlobalThesisUploadLimit,
+        setUser: setUserThesisUploadLimit,
+        unit: 'investigaciones',
+        emptyGlobal: 'vuelve al valor por defecto',
+    },
+} as const;
 
 /**
- * Edits a cap on total voice-agent minutes. With `userId` it edits that
- * account's personal cap (empty = falls back to the global one); without it,
- * the global cap (empty = unlimited). Saves on blur or Enter.
+ * Edits a per-account cap: total voice-agent minutes (`kind="voice"`) or thesis
+ * uploads (`kind="uploads"`). With `userId` it edits that account's personal
+ * cap (empty = falls back to the global one); without it, the global cap.
+ * Saves on blur or Enter.
  */
 export default function VoiceLimitInput({
+    kind = 'voice',
     userId,
     value,
     placeholder,
     label,
 }: {
+    kind?: keyof typeof KINDS;
     userId?: string;
     value: number | null;
     placeholder: string;
     label: string;
 }) {
+    const config = KINDS[kind];
     const initial = value === null ? '' : String(value);
     const [saved, setSaved] = useState(initial);
     const [current, setCurrent] = useState(initial);
@@ -31,7 +52,7 @@ export default function VoiceLimitInput({
         if (next === saved) return;
 
         startTransition(async () => {
-            const result = userId ? await setUserVoiceLimit(userId, next) : await setGlobalVoiceLimit(next);
+            const result = userId ? await config.setUser(userId, next) : await config.setGlobal(next);
             if (!result.success) {
                 setCurrent(saved);
                 toast.error(result.error ?? 'No se pudo guardar el límite.');
@@ -40,10 +61,10 @@ export default function VoiceLimitInput({
             setSaved(next);
             toast.success(
                 next
-                    ? `${label}: ${next} minutos.`
+                    ? `${label}: ${next} ${config.unit}.`
                     : userId
                       ? `${label}: usa el límite general.`
-                      : `${label}: sin límite.`,
+                      : `${label}: ${config.emptyGlobal}.`,
             );
         });
     };

@@ -1,8 +1,7 @@
 import UploadForm from "@/components/UploadForm";
 import LimitReachedModal from "@/components/LimitReachedModal";
 import UploadUnavailableModal from "@/components/UploadUnavailableModal";
-import { getUserBookCount } from "@/lib/actions/book.actions";
-import { MAX_BOOKS_PER_USER } from "@/lib/constants";
+import { getMyThesisUploadAllowance } from "@/lib/actions/book.actions";
 import { guardInterventionPage } from "@/lib/study/access";
 import { getThesisUploadBlock, THESIS_UPLOAD_BLOCK_MESSAGES } from "@/lib/study/upload.server";
 
@@ -14,8 +13,9 @@ const Page = async () => {
     // Upload opens to the experimental arm only when the admin turns the flag on.
     const uploadBlock = await getThesisUploadBlock(context);
 
-    const bookCount = await getUserBookCount();
-    const limitReached = (bookCount.data ?? 0) >= MAX_BOOKS_PER_USER;
+    const allowance = await getMyThesisUploadAllowance();
+    const limit = allowance.data?.limit ?? null;
+    const limitReached = allowance.data ? allowance.data.remaining <= 0 : false;
 
     return (
         <main className="new-book">
@@ -30,7 +30,7 @@ const Page = async () => {
                     showSurveysLink={uploadBlock === 'baseline'}
                 />
             ) : limitReached ? (
-                <LimitReachedModal />
+                <LimitReachedModal limit={limit ?? 0} />
             ) : (
                 <UploadForm />
             )}
