@@ -58,6 +58,7 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 | Logs del sistema (admin): catálogo cerrado de eventos, escritura que nunca lanza, vista general filtrable (`/admin/logs`) y vista por sesión con logs, transcripción e informe (`/admin/sesiones/[id]`) | `lib/system-logs/` (`catalog.ts`, `write.server.ts`, `filters.ts`), `lib/actions/system-log.actions.ts`, `components/admin/SystemLog*.tsx` |
 | Captura de errores hacia los logs: todo `console.error` del servidor (`server.error`, instalado desde `instrumentation.ts`) y errores no controlados del navegador (`client.error`) | `lib/system-logs/console-capture.ts`, `instrumentation.ts`, `components/ClientErrorReporter.tsx` |
 | Límite de subidas de investigación (general en `app_settings` + personal en `users`; cuentan las subidas exitosas, borrar no devuelve el cupo) | `lib/study/uploads.ts`, `lib/study/uploads.server.ts` |
+| Diagnóstico del sistema (admin, `/admin/diagnostico`): pruebas reales de variables de entorno, dominio, base y migraciones, Gemini, Vapi (assistant, URL del tool `searchBook` y webhook), R2, búsquedas por sesión reciente y probador del retriever | `lib/diagnostics/checks.server.ts`, `app/(root)/admin/diagnostico/page.tsx` |
 | Asignación de grupo y PDFs compartidos (admin) | `lib/actions/study.actions.ts`, `lib/actions/material.actions.ts`, `components/admin/` |
 
 ## Cómo funciona hoy el flujo de voz

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Check, Circle, Clock3, LockKeyhole, Minus, ScrollText, ShieldCheck, UsersRound } from 'lucide-react';
+import { Check, Circle, Clock3, LockKeyhole, Minus, ScrollText, ShieldCheck, Stethoscope, UsersRound } from 'lucide-react';
 
 import ParticipantCodeInput from '@/components/admin/ParticipantCodeInput';
 import { ImpersonateButton } from '@/components/admin/ImpersonateButton';
@@ -192,6 +192,12 @@ export default async function AdminPage({
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/15 bg-white px-4 py-2 text-sm font-semibold text-[#663820] shadow-sm transition-colors hover:bg-[#fff6e5]"
                     >
                         <ScrollText className="size-4" /> Logs del sistema
+                    </Link>
+                    <Link
+                        href="/admin/diagnostico"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/15 bg-white px-4 py-2 text-sm font-semibold text-[#663820] shadow-sm transition-colors hover:bg-[#fff6e5]"
+                    >
+                        <Stethoscope className="size-4" /> Diagnóstico
                     </Link>
                     <ExportDialog
                         participants={users.map((user) => ({
