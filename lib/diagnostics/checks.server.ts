@@ -8,6 +8,7 @@ import { books, sessionTurns, systemLogs, users, voiceSessions } from '@/databas
 import journal from '@/drizzle/meta/_journal.json';
 import { searchBookSegments } from '@/lib/actions/book.actions';
 import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
+import { APP_ENV_VARS } from '@/lib/diagnostics/env.server';
 import { embeddingErrorStatus, generateQueryEmbedding } from '@/lib/embeddings';
 import { geminiJudge, JUDGE_MODEL } from '@/lib/metrics/judge';
 import { r2, R2_BUCKET } from '@/lib/r2';
@@ -63,23 +64,9 @@ function hostOf(url: string | undefined | null): string | null {
 // Configuration
 // ---------------------------------------------------------------------------
 
-const REQUIRED_ENV: readonly { name: string; purpose: string; secret: boolean }[] = [
-    { name: 'DATABASE_URL', purpose: 'base de datos', secret: true },
-    { name: 'BETTER_AUTH_SECRET', purpose: 'inicio de sesión', secret: true },
-    { name: 'ADMIN_EMAIL', purpose: 'acceso al panel de admin', secret: false },
-    { name: 'GEMINI_API_KEY', purpose: 'embeddings y juez del informe', secret: true },
-    { name: 'VAPI_PRIVATE_API_KEY', purpose: 'motivo de fin y costo de cada llamada, y este diagnóstico', secret: true },
-    { name: 'NEXT_PUBLIC_VAPI_API_KEY', purpose: 'iniciar la llamada de voz en el navegador', secret: true },
-    { name: 'NEXT_PUBLIC_ASSISTANT_ID', purpose: 'assistant de Vapi', secret: false },
-    { name: 'NEXT_PUBLIC_BASE_URL', purpose: 'dominio de la app (inicio de sesión)', secret: false },
-    { name: 'R2_ACCOUNT_ID', purpose: 'almacenamiento de PDFs', secret: false },
-    { name: 'R2_ACCESS_KEY_ID', purpose: 'almacenamiento de PDFs', secret: true },
-    { name: 'R2_SECRET_ACCESS_KEY', purpose: 'almacenamiento de PDFs', secret: true },
-    { name: 'R2_BUCKET_NAME', purpose: 'almacenamiento de PDFs', secret: false },
-];
-
 function checkEnvironment(origin: string): DiagnosticCheck[] {
-    const checks: DiagnosticCheck[] = REQUIRED_ENV.map(({ name, purpose, secret }) => {
+    const required = APP_ENV_VARS.filter((variable) => variable.required);
+    const checks: DiagnosticCheck[] = required.map(({ name, purpose, secret }) => {
         const value = process.env[name]?.trim();
         return value
             ? { id: `env-${name}`, group: 'Configuración', label: name, status: 'ok', detail: secret ? `Configurada (${lastFour(value)}).` : `Configurada: ${value}` }
@@ -88,7 +75,7 @@ function checkEnvironment(origin: string): DiagnosticCheck[] {
                 group: 'Configuración',
                 label: name,
                 status: 'fail',
-                detail: `Falta. Se usa para: ${purpose}.`,
+                detail: `Falta. Se usa para: ${purpose.toLowerCase()}.`,
                 fix: `Agrégala en las variables de entorno del deploy y vuelve a desplegar.${name.startsWith('NEXT_PUBLIC_') ? ' Al ser NEXT_PUBLIC_, hace falta un build nuevo, no solo reiniciar.' : ''}`,
             };
     });

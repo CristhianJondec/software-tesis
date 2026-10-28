@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { AlertTriangle, ArrowLeft, CheckCircle2, CircleSlash, RefreshCw, Stethoscope, XCircle } from 'lucide-react';
 
+import EnvVarValue from '@/components/admin/EnvVarValue';
 import { checkAdminAccess } from '@/lib/admin/access';
 import { RETRIEVER_MAX_DISTANCE } from '@/lib/constants';
 import {
@@ -12,6 +13,7 @@ import {
     type CheckStatus,
     type DiagnosticCheck,
 } from '@/lib/diagnostics/checks.server';
+import { listEnvironment } from '@/lib/diagnostics/env.server';
 import { formatDateTime } from '@/lib/metrics/format';
 import { cn, formatDuration } from '@/lib/utils';
 
@@ -92,6 +94,7 @@ export default async function DiagnosticsPage({
         probeBookId && probeQuery ? probeRetriever(probeBookId, probeQuery) : Promise.resolve(null),
     ]);
 
+    const environment = listEnvironment();
     const groups = [...new Set(checks.map((check) => check.group))];
     const failures = checks.filter((check) => check.status === 'fail');
     const probeBook = bookOptions.find((book) => book.id === probeBookId);
@@ -158,6 +161,54 @@ export default async function DiagnosticsPage({
                     </ul>
                 </section>
             ))}
+
+            <section id="variables" className="mb-8 scroll-mt-24">
+                <h2 className="mb-1 font-serif text-xl font-bold">Variables de entorno</h2>
+                <p className="mb-3 text-sm text-[var(--text-secondary)]">
+                    Las que lee la app en este deploy. Los secretos se piden al servidor solo al pulsar «Mostrar», y cada
+                    vez queda registrado en los logs. No compartas capturas con valores visibles.
+                </p>
+                <ul className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
+                    {environment.app.map((variable) => (
+                        <li
+                            key={variable.name}
+                            className="grid gap-2 border-t border-black/5 px-4 py-3 first:border-0 md:grid-cols-[minmax(0,16rem)_1fr_auto] md:items-center md:gap-4"
+                        >
+                            <div className="min-w-0">
+                                <p className="font-mono text-sm font-semibold break-all">{variable.name}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">{variable.purpose}</p>
+                            </div>
+                            <div className="min-w-0">
+                                {variable.set && variable.preview !== null ? (
+                                    variable.secret ? (
+                                        <EnvVarValue name={variable.name} preview={variable.preview} />
+                                    ) : (
+                                        <code className="rounded bg-[#f7f2e6] px-2 py-1 text-xs break-all">{variable.preview}</code>
+                                    )
+                                ) : (
+                                    <span className="text-sm text-[var(--text-secondary)]">No definida</span>
+                                )}
+                            </div>
+                            <div className="flex md:justify-end">
+                                <StatusBadge status={variable.set ? 'ok' : variable.required ? 'fail' : 'skip'} />
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                {environment.other.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-black/10 bg-white p-4 shadow-sm">
+                        <p className="mb-2 text-sm font-semibold">Otras variables definidas que la app no usa</p>
+                        <ul className="grid gap-2">
+                            {environment.other.map((name) => (
+                                <li key={name} className="flex flex-wrap items-center gap-3">
+                                    <span className="font-mono text-sm break-all">{name}</span>
+                                    <EnvVarValue name={name} preview="••••" />
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </section>
 
             <section className="mb-8">
                 <h2 className="mb-1 font-serif text-xl font-bold">Sesiones recientes</h2>

@@ -60,6 +60,7 @@ export const LOG_EVENTS = {
     // Admin
     'admin.impersonation_started': 'El admin entró como el participante',
     'admin.impersonation_ended': 'El admin salió de la cuenta del participante',
+    'admin.env_revealed': 'El admin mostró una variable de entorno',
 } as const;
 
 export type LogEvent = keyof typeof LOG_EVENTS;
