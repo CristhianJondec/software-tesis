@@ -24,7 +24,7 @@ const Page = async ({ searchParams }: { searchParams: Promise<{ query?: string }
 
             <div className="library-books-grid">
                 {books.map((book) => (
-                    <BookCard key={book.id} id={book.id} title={book.title} author={book.author} coverURL={`/api/cover/${book.id}`} slug={book.slug} />
+                    <BookCard key={book.id} id={book.id} title={book.title} author={book.author} coverURL={`/api/cover/${book.id}`} slug={book.slug} processed={book.totalSegments > 0} />
                 ))}
             </div>
         </main>

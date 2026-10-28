@@ -57,6 +57,8 @@ export interface BookCardProps {
     author: string;
     coverURL: string;
     slug: string;
+    /** False when the thesis has no segments (its processing never finished). */
+    processed?: boolean;
 }
 
 export interface Messages {

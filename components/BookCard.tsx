@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { deleteBook } from '@/lib/actions/book.actions';
 import { BookCardProps } from '@/types';
 
-const BookCard = ({ id, title, author, coverURL, slug }: BookCardProps) => {
+const BookCard = ({ id, title, author, coverURL, slug, processed = true }: BookCardProps) => {
     const router = useRouter();
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleted, setIsDeleted] = useState(false);
@@ -49,8 +49,13 @@ const BookCard = ({ id, title, author, coverURL, slug }: BookCardProps) => {
         <article className="book-card group relative">
             <Link href={`/books/${slug}`} className="block h-full rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#663820] focus-visible:ring-offset-2">
                 <figure className="book-card-figure">
-                    <div className="book-card-cover-wrapper">
+                    <div className="book-card-cover-wrapper relative">
                         <Image src={coverURL} alt={title} width={133} height={200} className="book-card-cover" unoptimized />
+                        {!processed && (
+                            <span className="absolute inset-x-2 bottom-2 rounded-md bg-amber-100 px-2 py-1 text-center text-xs font-semibold text-amber-900">
+                                Sin procesar
+                            </span>
+                        )}
                     </div>
 
                     <figcaption className="book-card-meta">

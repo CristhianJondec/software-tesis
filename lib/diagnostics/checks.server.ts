@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { HeadBucketCommand } from '@aws-sdk/client-s3';
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, is, sql } from 'drizzle-orm';
+import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 
 import { db } from '@/database/db';
+import * as schema from '@/database/schema';
 import { books, sessionTurns, systemLogs, users, voiceSessions } from '@/database/schema';
-import journal from '@/drizzle/meta/_journal.json';
 import { searchBookSegments } from '@/lib/actions/book.actions';
 import { RETRIEVER_MAX_DISTANCE, RETRIEVER_TOP_K } from '@/lib/constants';
 import { APP_ENV_VARS } from '@/lib/diagnostics/env.server';
@@ -137,36 +138,73 @@ async function checkDatabase(): Promise<DiagnosticCheck[]> {
     });
     if (connection.status !== 'ok') return [connection];
 
-    const migrations = await timed(async () => {
-        const expected = journal.entries;
+    // Migrations are pasted by hand in the Supabase SQL editor, so Drizzle's own
+    // registry (drizzle.__drizzle_migrations) is not reliable. Compare the real
+    // columns with the ones the code's schema declares instead.
+    const columns = await timed(async () => {
+        const base = { id: 'db-schema', group: 'Base de datos', label: 'Tablas y columnas' };
         try {
-            const rows = await db.execute<{ created_at: string | number }>(
-                sql`select created_at from drizzle.__drizzle_migrations`,
+            const rows = await db.execute<{ table_name: string; column_name: string }>(
+                sql`select table_name, column_name from information_schema.columns where table_schema = 'public'`,
             );
-            const lastApplied = Math.max(0, ...rows.map((row) => Number(row.created_at)));
-            const pending = expected.filter((entry) => entry.when > lastApplied).map((entry) => entry.tag);
-            return pending.length === 0
-                ? { id: 'db-migrations', group: 'Base de datos', label: 'Migraciones', status: 'ok' as const, detail: `Las ${expected.length} migraciones están aplicadas.` }
-                : {
-                    id: 'db-migrations',
-                    group: 'Base de datos',
-                    label: 'Migraciones',
-                    status: 'fail' as const,
-                    detail: `Faltan ${pending.length}: ${pending.join(', ')}.`,
-                    fix: 'Ejecuta npm run db:migrate con la DATABASE_URL de producción.',
-                };
-        } catch (error) {
+            const existing = new Set(rows.map((row) => `${row.table_name}.${row.column_name}`));
+            const existingTables = new Set(rows.map((row) => row.table_name));
+
+            const missingTables: string[] = [];
+            const missingColumns: string[] = [];
+            for (const value of Object.values(schema)) {
+                if (!is(value, PgTable)) continue;
+                const config = getTableConfig(value);
+                if (!existingTables.has(config.name)) {
+                    missingTables.push(config.name);
+                    continue;
+                }
+                for (const column of config.columns) {
+                    if (!existing.has(`${config.name}.${column.name}`)) missingColumns.push(`${config.name}.${column.name}`);
+                }
+            }
+
+            if (missingTables.length === 0 && missingColumns.length === 0) {
+                return { ...base, status: 'ok' as const, detail: 'La base tiene todas las tablas y columnas que usa el código.' };
+            }
             return {
-                id: 'db-migrations',
-                group: 'Base de datos',
-                label: 'Migraciones',
-                status: 'warn' as const,
-                detail: `No se pudo leer el registro de migraciones: ${describeError(error)}`,
+                ...base,
+                status: 'fail' as const,
+                detail: [
+                    missingTables.length > 0 ? `Faltan tablas: ${missingTables.join(', ')}.` : '',
+                    missingColumns.length > 0 ? `Faltan columnas: ${missingColumns.join(', ')}.` : '',
+                ].filter(Boolean).join(' '),
+                fix: 'Pega en el SQL Editor de Supabase la migración de drizzle/ que las crea.',
             };
+        } catch (error) {
+            return { ...base, status: 'warn' as const, detail: `No se pudo leer el esquema: ${describeError(error)}` };
         }
     });
 
-    return [connection, migrations];
+    const unprocessed = await timed(async () => {
+        const base = { id: 'db-unprocessed', group: 'Base de datos', label: 'Investigaciones sin procesar' };
+        try {
+            // Ten minutes of grace so an upload still in progress is not flagged.
+            const rows = await db
+                .select({ title: books.title, participantCode: users.participantCode, userName: users.name })
+                .from(books)
+                .innerJoin(users, eq(books.userId, users.id))
+                .where(and(eq(books.totalSegments, 0), sql`${books.createdAt} < now() - interval '10 minutes'`));
+            if (rows.length === 0) {
+                return { ...base, status: 'ok' as const, detail: 'Todas las investigaciones tienen sus segmentos.' };
+            }
+            return {
+                ...base,
+                status: 'warn' as const,
+                detail: `${rows.length} sin segmentos: ${rows.map((row) => `${row.participantCode ?? row.userName} («${row.title.slice(0, 60)}»)`).join('; ')}.`,
+                fix: 'No se puede iniciar sesión con ellas. El estudiante verá un aviso para eliminarla y volver a subirla (no pierde su cupo).',
+            };
+        } catch (error) {
+            return { ...base, status: 'warn' as const, detail: describeError(error) };
+        }
+    });
+
+    return [connection, columns, unprocessed];
 }
 
 // ---------------------------------------------------------------------------

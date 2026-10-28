@@ -186,13 +186,23 @@ export const startVoiceSession = async (
             }));
 
         const ownerCheck = await db
-            .select({ id: books.id })
+            .select({ id: books.id, totalSegments: books.totalSegments })
             .from(books)
             .where(and(eq(books.id, bookId), eq(books.userId, userId)))
             .limit(1);
 
         if (ownerCheck.length === 0) {
             return { success: false, error: 'Book not found or unauthorized' };
+        }
+
+        // A thesis whose processing never finished has no segments: the agent
+        // could not retrieve anything from it, so the session would be invalid.
+        if (ownerCheck[0].totalSegments === 0) {
+            logRejected('La investigación no tiene segmentos procesados.');
+            return {
+                success: false,
+                error: 'Tu investigación no terminó de procesarse. Elimínala y vuelve a subir el PDF.',
+            };
         }
 
         // Total voice time cap set by the admin (personal, else global). The

@@ -6,6 +6,7 @@ import { getBookBySlug } from "@/lib/actions/book.actions";
 import { normalizeFocusTopics } from "@/lib/preparation/focus";
 import { guardInterventionPage } from "@/lib/study/access";
 import VapiControls from "@/components/VapiControls";
+import UnprocessedThesisNotice from "@/components/UnprocessedThesisNotice";
 
 export default async function BookDetailsPage({
   params,
@@ -35,7 +36,12 @@ export default async function BookDetailsPage({
         <ArrowLeft className="size-6 text-[#212a3b]" />
       </Link>
 
-      <VapiControls book={book} focusTopics={focusTopics} />
+      {/* Without segments the retriever has nothing to return: no session. */}
+      {book.totalSegments > 0 ? (
+        <VapiControls book={book} focusTopics={focusTopics} />
+      ) : (
+        <UnprocessedThesisNotice bookId={book.id} title={book.title} />
+      )}
     </div>
   );
 }
