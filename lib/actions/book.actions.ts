@@ -46,25 +46,26 @@ export const getAllBooks = async (search?: string) => {
     }
 };
 
-export const checkBookExists = async (title: string) => {
-    try {
-        const session = await getSession();
-        if (!session?.user) return { exists: false };
-
-        const slug = generateSlug(title);
-        const rows = await db
-            .select()
-            .from(books)
-            .where(and(eq(books.userId, session.user.id), eq(books.slug, slug)))
-            .limit(1);
-
-        if (rows.length === 0) return { exists: false };
-        return { exists: true, book: rows[0] };
-    } catch (e) {
-        console.error('Error checking book exists', e);
-        return { exists: false, error: e };
+/**
+ * First free slug for this account: `base`, then `base-2`, `base-3`... Two
+ * theses may share a title (a student re-uploading after a failed attempt), but
+ * each needs its own URL, and (user_id, slug) is unique.
+ */
+async function uniqueSlug(userId: string, base: string): Promise<string> {
+    const taken = new Set(
+        (
+            await db
+                .select({ slug: books.slug })
+                .from(books)
+                .where(and(eq(books.userId, userId), ilike(books.slug, `${base}%`)))
+        ).map((row) => row.slug),
+    );
+    if (!taken.has(base)) return base;
+    for (let n = 2; ; n++) {
+        const candidate = `${base}-${n}`;
+        if (!taken.has(candidate)) return candidate;
     }
-};
+}
 
 /**
  * Upload cap of the signed-in account (lib/study/uploads.ts). `null` for the
@@ -97,17 +98,9 @@ export const createBook = async (data: CreateBook) => {
         const user = await requireUser();
         const userId = user.id;
 
-        const slug = generateSlug(data.title);
-
-        const existing = await db
-            .select()
-            .from(books)
-            .where(and(eq(books.userId, userId), eq(books.slug, slug)))
-            .limit(1);
-
-        if (existing.length > 0) {
-            return { success: true, data: existing[0], alreadyExists: true };
-        }
+        // No duplicate-title check: re-uploading the same thesis always processes
+        // the new file. Only the URL slug is made unique.
+        const slug = await uniqueSlug(userId, generateSlug(data.title));
 
         // Counts successful uploads, not stored theses: deleting one does not
         // give the slot back (lib/study/uploads.ts). The researcher is never capped.

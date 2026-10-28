@@ -15,7 +15,7 @@ import VoiceSelector from './VoiceSelector';
 import LoadingOverlay from './LoadingOverlay';
 import { useSession } from "@/lib/auth-client";
 import { toast } from 'sonner';
-import {checkBookExists, createBook, saveBookSegments} from "@/lib/actions/book.actions";
+import {createBook, saveBookSegments} from "@/lib/actions/book.actions";
 import {useRouter} from "next/navigation";
 import {generateSlug, parsePDFFile} from "@/lib/utils";
 
@@ -79,15 +79,6 @@ const UploadForm = () => {
         // PostHog -> Track Book Uploads...
 
         try {
-            const existsCheck = await checkBookExists(data.title);
-
-            if(existsCheck.exists && existsCheck.book) {
-                toast.info("Ya existe una investigación con el mismo título.");
-                form.reset()
-                router.push(`/books/${existsCheck.book.slug}`)
-                return;
-            }
-
             // The persisted title has no character limit; storage keys stay short and filesystem-safe.
             const fileTitle = generateSlug(data.title);
             const pdfFile = data.pdfFile;
@@ -129,13 +120,6 @@ const UploadForm = () => {
                 } else {
                     toast.error(book.error as string || "Error al crear la investigación");
                 }
-                return;
-            }
-
-            if(book.alreadyExists) {
-                toast.info("Ya existe una investigación con el mismo título.");
-                form.reset()
-                router.push(`/books/${book.data!.slug}`)
                 return;
             }
 
