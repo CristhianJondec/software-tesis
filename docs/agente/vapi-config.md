@@ -67,8 +67,9 @@ aquí y se reporta como parte del stack:
   con el nivel 2.
 - `maxTokens: 450`. Antes era `250` y funcionaba como contención dura de turnos cortos, pero
   cortaba a media frase el cierre y las explicaciones largas (unas 170–190 palabras en
-  español). Ahora el largo lo fija el prompt: 54 palabras por pregunta, 60 en otros turnos y
-  120 en el cierre. Este límite queda solo como red de seguridad.
+  español). Ahora el largo lo fija el prompt: 30 palabras por pregunta, 35 en otros turnos y
+  70 en el cierre (antes 54, 60 y 120; se acortaron el 28/10/2026 porque los turnos se
+  sentían largos en voz). Este límite queda solo como red de seguridad.
 
 > **Verificar antes de reportar en la investigación:** confirma en el dashboard que el modelo
 > configurado hoy coincide con lo anotado aquí, y corrige este archivo si difiere. El nombre
