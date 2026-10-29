@@ -65,7 +65,8 @@ objetivos y rompe cosas. Trabaja con los nombres que existen.
 
 0. Antes de conectar, `SessionSetup` pide la autoevaluación 0–10 y muestra el nivel de
    exigencia sugerido por `lib/difficulty/adaptation.ts` (función pura, no un LLM). El
-   estudiante puede sobrescribirlo.
+   estudiante puede sobrescribirlo. «Iniciar» solo se habilita tras la prueba de micrófono
+   (`components/MicCheck.tsx`), que exige oír la voz del estudiante para no abrir llamadas mudas.
 1. `useVapi.start()` valida límites, crea un registro en `voice_sessions` con el nivel y la
    autoevaluación, y llama a `vapi.start(ASSISTANT_ID, assistantOverrides)`, enviando desde
    código el system prompt (`lib/agent-prompt.ts` + las directivas del nivel), el modelo, el

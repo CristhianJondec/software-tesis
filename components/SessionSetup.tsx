@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Info, Loader2, Play, Sparkles, Target } from 'lucide-react';
+import { Info, Loader2, Play, Sparkles, Target, Wifi } from 'lucide-react';
 
 import AnxietyScale from '@/components/AnxietyScale';
+import MicCheck from '@/components/MicCheck';
 import { getSessionPreparation } from '@/lib/actions/session.actions';
 import { suggestDifficultyLevel } from '@/lib/difficulty/adaptation';
 import {
@@ -19,6 +20,9 @@ interface SessionSetupProps {
     disabled: boolean;
     /** Topics of the preparation map this session is limited to. Empty = full defense. */
     focusTopics?: PreparationTopicId[];
+    /** Whether the microphone check already passed; kept by the parent across sessions. */
+    micReady: boolean;
+    onMicReady: () => void;
     onStart: (options: {
         difficultyLevel: DifficultyLevelId;
         preSessionAnxiety: number | null;
@@ -52,6 +56,8 @@ export default function SessionSetup({
     bookId,
     disabled,
     focusTopics = [],
+    micReady,
+    onMicReady,
     onStart,
 }: SessionSetupProps) {
     const [preparation, setPreparation] = useState<SessionPreparation | null>(null);
@@ -222,9 +228,20 @@ export default function SessionSetup({
                 </p>
             )}
 
+            <div className="mt-6">
+                <MicCheck passed={micReady} onPassed={onMicReady} />
+            </div>
+
+            <p className="mt-4 flex items-start gap-2 text-xs text-[#6b7280]">
+                <Wifi className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                La conversación depende de tu internet. Si la conexión es lenta, la voz puede demorar,
+                entrecortarse o la llamada puede cortarse. Usa una red estable y, si se corta, inicia la
+                sesión de nuevo.
+            </p>
+
             <button
                 type="button"
-                disabled={disabled}
+                disabled={disabled || !micReady}
                 onClick={() =>
                     onStart({
                         difficultyLevel: effectiveLevel,
@@ -237,6 +254,12 @@ export default function SessionSetup({
                 <Play className="size-4" aria-hidden="true" />
                 Iniciar {ORDERED_DIFFICULTY_LEVELS[effectiveLevel - 1].name}
             </button>
+
+            {!micReady && (
+                <p className="mt-3 text-xs text-[#6b7280]">
+                    Prueba tu micrófono para poder iniciar.
+                </p>
+            )}
 
             {anxiety === null && (
                 <p className="mt-3 text-xs text-[#6b7280]">

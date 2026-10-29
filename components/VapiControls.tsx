@@ -1,6 +1,6 @@
 'use client';
 
-import { History, HelpCircle, LineChart, Mic, MicOff, PhoneOff } from "lucide-react";
+import { History, HelpCircle, LineChart, Mic, MicOff, PhoneOff, Wifi } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import {IBook} from "@/types";
 import Image from "next/image";
@@ -24,6 +24,8 @@ const VapiControls = ({
 }) => {
     const { status, isActive, messages, currentMessage, currentUserMessage, duration, start, stop, isMuted, toggleMuted, clearError, limitError, maxDurationSeconds, activeLevel, finishedSessionId, clearFinishedSession } = useVapi(book)
     const [showRequirements, setShowRequirements] = useState(false);
+    // Passed once per page visit: the same microphone keeps working between sessions.
+    const [micReady, setMicReady] = useState(false);
     const requirementsRef = useRef<HTMLDivElement>(null);
     const level = getDifficultyLevel(activeLevel);
     const isStarting = status === 'connecting';
@@ -209,8 +211,20 @@ const VapiControls = ({
                     bookId={book.id}
                     disabled={isStarting}
                     focusTopics={focusTopics}
+                    micReady={micReady}
+                    onMicReady={() => setMicReady(true)}
                     onStart={start}
                 />
+            )}
+
+            {isActive && (
+                <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    <Wifi className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <span>
+                        Si tu internet es lento, puede haber demoras, cortes en la voz o interferencias, e incluso
+                        cortarse la llamada. Si pasa, cuelga e inicia una nueva sesión.
+                    </span>
+                </p>
             )}
 
             <div className="vapi-transcript-wrapper">

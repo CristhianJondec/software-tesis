@@ -89,7 +89,10 @@ function friendlyEndedReason(reason: string | null): string {
         'silence-timed-out': 'La conversación terminó por inactividad',
         'customer-did-not-give-microphone-permission': 'No se concedió permiso al micrófono',
     };
-    return labels[reason] ?? reason;
+    if (labels[reason]) return labels[reason];
+    if (reason.includes('did-not-receive-customer-audio')) return 'No llegó audio del micrófono del estudiante';
+    if (reason.includes('error')) return 'Falla del servicio de voz o de la conexión';
+    return reason;
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
