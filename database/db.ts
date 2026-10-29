@@ -8,11 +8,15 @@ const globalForDb = globalThis as unknown as { sql: ReturnType<typeof postgres> 
 const sql =
     globalForDb.sql ??
     postgres(process.env.DATABASE_URL!, {
-        // Each Vercel instance holds its own pool, and instances from previous
-        // deploys linger for a while. Small pools that close idle connections
-        // keep the total under Supabase's client limit; without that, a few
-        // deploys in a row exhaust it and every query waits forever.
-        max: process.env.NODE_ENV === 'production' ? 4 : 1,
+        // Production goes through Supabase's transaction pooler (port 6543).
+        // When every connection of the pool is busy, postgres.js pipelines the
+        // next queries on an open one, and the pooler leaves those pipelined
+        // queries hanging (seen on pg_stat_activity as `active` / `ClientRead`):
+        // /admin and the export, which fire ~20 queries at once, never finished.
+        // A pool larger than any page's concurrency avoids pipelining; client
+        // connections to the transaction pooler are cheap. Idle ones close fast
+        // so instances from previous deploys do not hold them.
+        max: process.env.NODE_ENV === 'production' ? 30 : 1,
         idle_timeout: 20,
         max_lifetime: 60 * 10,
         // Fail fast with an error instead of an endless spinner.
