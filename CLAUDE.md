@@ -130,8 +130,10 @@ micrófono y parlantes.
 3. **Todas las métricas, incluido RAGAs, se implementan en TypeScript** dentro del repo. No
    se agrega Python. (Ver la nota de honestidad metodológica en `docs/04`.)
 4. **El grupo control es pasivo**: solo `/surveys` y `/materiales`, sin agente de voz. El
-   experimental accede a la intervención y a `/surveys`, pero no a `/materiales`. Una cuenta con `study_group = NULL` no accede a nada y
-   espera en `/sin-asignar`; solo el admin asigna el grupo, desde `/admin`. La regla vive
+   experimental accede a la intervención y a `/surveys`, pero no a `/materiales`. Toda cuenta nueva entra como experimental al
+   registrarse (hook `databaseHooks.user.create.after` en `lib/auth.ts`); el admin puede
+   cambiarla a control desde `/admin`. Una cuenta con `study_group = NULL` no accede a nada y
+   espera en `/sin-asignar`. La regla vive
    en `lib/study/` y en ningún otro sitio. (Ver `docs/propuestas/07`.)
 
 ## Convenciones
