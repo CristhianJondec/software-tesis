@@ -103,25 +103,36 @@ export default function ExportDialog({ participants }: { participants: ExportCan
 
     const download = () => {
         startTransition(async () => {
-            if (options.format === 'xlsx') {
-                const result = await exportThesisWorkbook(options);
-                if (!result.success || !result.data) {
-                    toast.error(result.error ?? 'No se pudo exportar el archivo.');
-                    return;
-                }
-                const bytes = Uint8Array.from(atob(result.data.base64), (char) => char.charCodeAt(0));
-                saveFile(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', result.data.filename);
-            } else {
-                const result = await exportSurveySummaryCsv(options);
-                if (!result.success || !result.data) {
-                    toast.error(result.error ?? 'No se pudo exportar el archivo.');
-                    return;
-                }
-                saveFile(result.data.content, 'text/csv;charset=utf-8', result.data.filename);
+            try {
+                await runExport();
+            } catch (error) {
+                // Typically a page opened before the latest deploy calling a
+                // server action that no longer exists; a reload fixes it.
+                console.warn('Export failed', error);
+                toast.error('No se pudo generar el archivo. Recarga la página (Ctrl+F5) e inténtalo de nuevo.');
             }
-            toast.success(`Exportados ${selectedCount} ${selectedCount === 1 ? 'participante' : 'participantes'}.`);
-            setOpen(false);
         });
+    };
+
+    const runExport = async () => {
+        if (options.format === 'xlsx') {
+            const result = await exportThesisWorkbook(options);
+            if (!result.success || !result.data) {
+                toast.error(result.error ?? 'No se pudo exportar el archivo.');
+                return;
+            }
+            const bytes = Uint8Array.from(atob(result.data.base64), (char) => char.charCodeAt(0));
+            saveFile(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', result.data.filename);
+        } else {
+            const result = await exportSurveySummaryCsv(options);
+            if (!result.success || !result.data) {
+                toast.error(result.error ?? 'No se pudo exportar el archivo.');
+                return;
+            }
+            saveFile(result.data.content, 'text/csv;charset=utf-8', result.data.filename);
+        }
+        toast.success(`Exportados ${selectedCount} ${selectedCount === 1 ? 'participante' : 'participantes'}.`);
+        setOpen(false);
     };
 
     return (
