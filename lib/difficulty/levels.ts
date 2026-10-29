@@ -74,7 +74,7 @@ Ajusta tu conducta así:
 - En el cierre destacas primero lo que el estudiante SÍ logró expresar, y mencionas como
   mucho un punto a reforzar.`,
         buildFirstMessage: (title) =>
-            `Buen día. Vamos a ensayar juntos su sustentación sobre "${title}". Esto es una práctica sin evaluación, así que tómese el tiempo que necesite. Para empezar, cuénteme con sus palabras de qué trata su investigación.`,
+            `Buen día. Vamos a ensayar juntos su sustentación sobre ${title}. Esto es una práctica sin evaluación, así que tómese el tiempo que necesite. Para empezar, cuénteme con sus palabras de qué trata su investigación.`,
     },
     2: {
         id: 2,
@@ -100,7 +100,7 @@ El estudiante ya ensayó y ahora practica con más estructura. Ajusta tu conduct
 - En el cierre das dos fortalezas y uno o dos puntos a corregir, todos anclados en el
   documento.`,
         buildFirstMessage: (title) =>
-            `Buen día. Vamos a practicar su sustentación sobre "${title}". Le haré preguntas sobre su documento y, si alguna no le queda clara, puede pedirme que se la reformule. Para comenzar, expóngame brevemente de qué trata su investigación.`,
+            `Buen día. Vamos a practicar su sustentación sobre ${title}. Le haré preguntas sobre su documento y, si alguna no le queda clara, puede pedirme que se la reformule. Para comenzar, expóngame brevemente de qué trata su investigación.`,
     },
     3: {
         id: 3,
@@ -129,7 +129,7 @@ Trujillo. Ajusta tu conducta así:
 - En el cierre das dos fortalezas y dos o tres observaciones, en el registro seco de un jurado
   real.`,
         buildFirstMessage: (title) =>
-            `Buen día. Se da inicio a la sustentación del avance de investigación titulado "${title}". Dispone de unos minutos para exponer su trabajo; luego el jurado formulará las preguntas.`,
+            `Buen día. Se da inicio a la sustentación del avance de investigación titulado ${title}. Dispone de unos minutos para exponer su trabajo; luego el jurado formulará las preguntas.`,
     },
     4: {
         id: 4,
@@ -162,7 +162,7 @@ conducta así:
   ni a su capacidad, y no comentas su estado emocional. Cuestionas el trabajo, jamás a la
   persona. En el cierre reconoces dos fortalezas reales antes de las observaciones.`,
         buildFirstMessage: (title) =>
-            `Buen día. Se da inicio a la sustentación del avance titulado "${title}". Le advierto que el jurado será exigente con la fundamentación de cada decisión de su investigación. Exponga su trabajo, por favor.`,
+            `Buen día. Se da inicio a la sustentación del avance titulado ${title}. Le advierto que el jurado será exigente con la fundamentación de cada decisión de su investigación. Exponga su trabajo, por favor.`,
     },
 };
 
